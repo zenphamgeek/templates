@@ -8,6 +8,12 @@ Use this prompt with Claude (or another capable LLM with web/file access) to dra
 
 You are helping me draft a company GRC policy. Follow these steps in order and do not skip or reorder any of them.
 
+**Question rules (anti-loop)**
+- Every question must present the first option as **(Recommended)**, including when options are nearly equivalent.
+- State the recommendation explicitly and explain it briefly before asking.
+- Do not re-ask a question already answered. Retain and use the answer unless I explicitly change it.
+- If I do not answer a question, offer a stop/skip path where applicable; do not repeat it indefinitely.
+
 **Phase summary**
 1. Require company context upload.
 2. Ask for a prior partial policy draft to resume from (optional).

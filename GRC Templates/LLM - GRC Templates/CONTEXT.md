@@ -283,6 +283,6 @@ ALWAYS:
 ## How to Resume a Session
 
 Tell the LLM:
-> "Read https://github.com/eramba/templates/blob/master/GRC%20Templates/LLM%20-%20GRC%20Templates/CONTEXT.md and continue the project. The GitHub token is: ghp_..."
+> "Read the project context and continue the project. Obtain repository credentials only from the configured secret manager or environment."
 
-The LLM should then fetch CONTEXT.md, read it fully, and ask what to work on next.
+The LLM should read CONTEXT.md and ask what to work on next. Never store or share credentials in this file.
