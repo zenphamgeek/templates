@@ -85,7 +85,12 @@ The CSV column headers in `mapping_controls_to_requirements.csv` exactly match t
 | EU AI Act | EU AI Act |
 
 ### First run
-On first run, all 22 policies and 99 controls will be created. Subsequent runs will update them.
+On first run, all 23 policies and 99 controls will be created. Subsequent runs will update them.
+
+Before committing policy-tag changes, verify the generated 23-policy × 17-column mapping table with:
+```bash
+python3 generate_mapping_table.py --check
+```
 
 ## GitHub Actions (future)
 

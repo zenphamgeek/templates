@@ -29,7 +29,7 @@ GRC Templates/LLM - GRC Templates/
 ├── Policies/
 │   ├── 00_mapping_table.md            ← SOURCE OF TRUTH: rebuilt from policy file tags
 │   ├── Access_Management.md
-│   └── ... (22 policies total)
+│   └── ... (23 policies total)
 └── Controls/
     ├── internal_controls.csv
     ├── mapping_controls_to_requirements.csv   ← column headers = eramba package names exactly
@@ -43,7 +43,9 @@ GRC Templates/update_script/
 
 ---
 
-## Frameworks Covered (16 total)
+## Frameworks Covered (16 external frameworks + AESCSF-SP1)
+
+The 16 listed frameworks are external compliance frameworks. AESCSF-SP1 is an additional profile, so policy and control mapping files have 17 framework columns.
 
 | CSV column header | eramba package name | eramba regulator ID |
 |---|---|---|
@@ -129,10 +131,10 @@ ISO 37001 req IDs in the policy files are stored with a `37001:2025 - ` prefix (
 This file is the authoritative cross-reference of which policies cover which framework requirements. It is **rebuilt from the policy files**, not maintained manually.
 
 To rebuild it after changing policy files:
-1. Read all 22 `.md` files
-2. Extract every `**Framework Tag (req1, req2)**` block
-3. Validate each req ID against the source framework CSVs
-4. Regenerate the table
+1. Run `python3 ../update_script/generate_mapping_table.py`
+2. Run `python3 ../update_script/generate_mapping_table.py --check` before committing
+
+The generator extracts every `**Framework Tag (req1, req2)**` block deterministically. Requirement validation remains a separate source-CSV check.
 
 Do NOT edit `00_mapping_table.md` manually — edit the policy `.md` files and rebuild.
 
@@ -140,9 +142,9 @@ Do NOT edit `00_mapping_table.md` manually — edit the policy `.md` files and r
 
 ## Controls Structure
 
-99 controls across 3 CSV files. Column headers in `mapping_controls_to_requirements.csv` exactly match eramba package names (see table above).
+99 controls across 3 CSV files. `mapping_controls_to_requirements.csv` has 17 framework columns: 16 external frameworks plus AESCSF-SP1. External column headers exactly match eramba package names (see table above).
 
-Controls were built from ISO 27002 and CIS Controls v8.1 as the primary sources, then mapped to all 16 frameworks.
+Controls were built from ISO 27002 and CIS Controls v8.1 as the primary sources, then mapped to the 16 external frameworks; AESCSF-SP1 is mapped as an additional profile.
 
 ---
 
@@ -250,7 +252,9 @@ python3 sync_eramba.py --only compliance --max-pages 127   # limit pagination fo
 
 ---
 
-## Current State (as of 2026-07-13)
+## Historical State (as of 2026-07-13)
+
+These are historical 2026-07 operational counts, not current corpus counts.
 
 - 22 policies created in eramba ✓
 - 99 controls: creation pending (API 502 issues on security-services index — to resolve with devs Monday)

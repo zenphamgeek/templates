@@ -1,6 +1,6 @@
 # LLM - GRC Templates
 
-A library of reusable policy and internal control templates for eramba customers, covering 13 compliance frameworks simultaneously. Customers import templates and trim or customise them for their specific framework package.
+A library of reusable policy and internal control templates for eramba customers, covering 16 external compliance frameworks plus AESCSF-SP1. Customers import templates and trim or customise them for their specific framework package.
 
 ---
 
@@ -12,7 +12,7 @@ LLM - GRC Templates/
 │   ├── 00_mapping_table.md       ← Policy-to-framework cross-reference
 │   ├── Access_Management.md
 │   ├── AI_Governance.md
-│   └── ... (22 policies total)
+│   └── ... (23 policies total)
 └── Controls/
     ├── internal_controls.csv
     ├── mapping_controls_to_requirements.csv
@@ -22,6 +22,8 @@ LLM - GRC Templates/
 ---
 
 ## Frameworks Covered
+
+16 external compliance frameworks are listed below. AESCSF-SP1 is an additional profile; generated policy and control mappings therefore contain 17 framework columns.
 
 | # | Framework | Version |
 |---|-----------|---------|
@@ -90,7 +92,7 @@ Both policy statements and procedure steps are grouped by framework using `**bol
 
 The tagging is at the step level (Option B), not the procedure level, so customers importing a single framework retain the full procedure with only the relevant steps, rather than losing entire procedures.
 
-### 22 Policies
+### 23 Policies
 
 | Policy | Primary Frameworks |
 |--------|--------------------|
@@ -171,9 +173,9 @@ Controls are distributed across 16 policies:
 
 ## Policy-to-Framework Mapping
 
-See `Policies/00_mapping_table.md` for the full cross-reference table (22 policies × 13 frameworks with matched requirement IDs).
+See `Policies/00_mapping_table.md` for the generated cross-reference table (23 policies × 17 framework columns: 16 external frameworks plus AESCSF-SP1) with matched requirement IDs. After policy-tag changes, run `python3 ../update_script/generate_mapping_table.py --check`.
 
-Summary (✓ = framework has requirements mapped to this policy):
+Historical 2026-07 summary (✓ = framework had requirements mapped to this policy):
 
 | Policy | PCI | 27001 | 27002 | SOC2 | NIST | CIS | SCF | NIS2 | 27701 | 45001 | 42001 | 37001 | 9001 |
 |--------|-----|-------|-------|------|------|-----|-----|------|-------|-------|-------|-------|------|
@@ -204,7 +206,7 @@ Summary (✓ = framework has requirements mapped to this policy):
 
 ## Controls-to-Framework Mapping
 
-See `Controls/mapping_controls_to_requirements.csv` for the full cross-reference (99 controls × 13 frameworks with matched requirement IDs).
+See `Controls/mapping_controls_to_requirements.csv` for the full cross-reference (99 controls × 17 framework columns: 16 external frameworks plus AESCSF-SP1) with matched requirement IDs.
 
 ---
 
@@ -220,7 +222,8 @@ The relationship is: **Policy Procedure** defines how something should be done �
 
 | Date | Change | Author |
 |------|--------|--------|
-| 2026-07-02 | Initial library: 22 policies, 99 controls, 13 frameworks (PCI DSS v4.0.1, ISO 27001:2022, ISO 27002:2022, SOC 2, NIST 800-53 Rev5, CIS v8.1, SCF 2025, NIS2, ISO 27701, ISO 45001, ISO 42001, ISO 37001, ISO 9001). Procedure tags added for all 13 frameworks. | LLM |
-| 2026-07-13 | Sync script built and operational. 22 policies and 975 compliance links created in eramba. Mapping table rebuilt from policy file tags. NIST renamed to NIST 800-53 v5. ISO 37001 prefix fixed. CONTEXT.md fully updated. | LLM |
-| 2026-07-12 | Added 3 new AI frameworks: OWASP LLM Top 10 2025, NIST AI 600-1 2024, EU AI Act 2024/1689. Added 17 new controls. Updated AI_Governance, Secure_Development, Risk_Management, Supplier_Management, Logging_Monitoring policies. | LLM |
+| 2026-09-04 | Clarified current corpus: 23 policies; 16 external frameworks plus AESCSF-SP1; generated mappings have 17 framework columns. Added generator-check reference. | VerticalRisk |
+| 2026-07-02 | Historical snapshot: initial library had 22 policies, 99 controls, 13 frameworks (PCI DSS v4.0.1, ISO 27001:2022, ISO 27002:2022, SOC 2, NIST 800-53 Rev5, CIS v8.1, SCF 2025, NIS2, ISO 27701, ISO 45001, ISO 42001, ISO 37001, ISO 9001). Procedure tags added for all 13 frameworks. | LLM |
+| 2026-07-13 | Historical snapshot: sync script built and operational; 22 policies and 975 compliance links created in eramba. Mapping table rebuilt from policy file tags. NIST renamed to NIST 800-53 v5. ISO 37001 prefix fixed. CONTEXT.md fully updated. | LLM |
+| 2026-07-12 | Historical snapshot: added 3 AI frameworks: OWASP LLM Top 10 2025, NIST AI 600-1 2024, EU AI Act 2024/1689. Added 17 controls. Updated AI_Governance, Secure_Development, Risk_Management, Supplier_Management, Logging_Monitoring policies. | LLM |
 | 2026-07-02 | Renamed directory from `Claude - GRC Templates` to `LLM - GRC Templates`. Moved `00_mapping_table.md` into `Policies/` subdirectory. Added this README. | LLM |
