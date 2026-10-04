@@ -1,0 +1,383 @@
+template_id: gas_pipeline_ncsp
+version: 1.0.0
+industry_vertical: gas_midstream_pipeline
+archetype: "Nam Con Son Gas Pipeline (NCSP) Archetype"
+
+metadata:
+  name: "Nam Con Son Gas Midstream Pipeline Resilience Template"
+  description: "Pipeline integrity management, intelligent pigging operation verification, and gas delivery surveillance template for the 399km Nam Con Son gas transportation network."
+  status: VERIFIED
+  author: "Industry Template Architect & Engine Specialist"
+  approver: "Zen Phạm"
+  created_at: "2026-10-04"
+  tags:
+    - gas_midstream
+    - pipeline_integrity
+    - intelligent_pigging
+    - scada
+    - esd_valves
+    - cathodic_protection
+    - metering
+  regulatory_frameworks:
+    - "ASME B31.8 Gas Transmission and Distribution Piping Systems"
+    - "TCVN 6475:2007 Safety Regulations for Offshore and Onshore Pipelines"
+    - "API 1160 Managing System Integrity for Hazardous Liquid Pipelines"
+    - "NACE SP0169 Control of External Corrosion on Underground Piping"
+
+taxonomy_and_fields:
+  collections:
+    - collection: ncsp_pigging_runs
+      name: "Pipeline Pigging Operations"
+      description: "Intelligent and cleaning pigging run logs, barrel pressures, and launch/receive authorizations."
+      fields:
+        - field: id
+          type: uuid
+        - field: run_code
+          type: string
+        - field: pipeline_segment
+          type: string
+        - field: tool_type
+          type: string
+        - field: status
+          type: string
+        - field: launcher_station_id
+          type: uuid
+        - field: pig_signal_armed
+          type: boolean
+        - field: launch_authorized_at
+          type: timestamp
+        - field: alert_flag
+          type: string
+
+    - collection: ncsp_scada_valves
+      name: "SCADA ESD & Station Valves"
+      description: "Real-time telemetry and interlock status for emergency shutdown (ESD), bypass, and kicker valves."
+      fields:
+        - field: id
+          type: uuid
+        - field: station_code
+          type: string
+        - field: esd_valves_armed
+          type: boolean
+        - field: bypass_lineup_correct
+          type: boolean
+        - field: kicker_valve_open
+          type: boolean
+        - field: barrel_pressure_equalized
+          type: boolean
+        - field: launcher_pressure_bar
+          type: float
+        - field: mainline_pressure_bar
+          type: float
+
+    - collection: ncsp_pipeline_integrity
+      name: "Pipeline Integrity & Cathodic Protection"
+      description: "CP potentials, sacrificial anode currents, and soil resistivity logs along KP-0 to KP-399."
+      fields:
+        - field: id
+          type: uuid
+        - field: kilometer_post
+          type: float
+        - field: segment_name
+          type: string
+        - field: cp_potential_mv
+          type: float
+        - field: soil_resistivity_ohm_m
+          type: float
+        - field: anode_current_ma
+          type: float
+        - field: integrity_status
+          type: string
+        - field: date_tested
+          type: date
+
+    - collection: ncsp_gas_metering
+      name: "Gas Custody Transfer & Metering"
+      description: "Volumetric delivery, gas composition, pressure, and temperature at delivery stations."
+      fields:
+        - field: id
+          type: uuid
+        - field: station_name
+          type: string
+        - field: timestamp
+          type: timestamp
+        - field: delivery_rate_mmscmd
+          type: float
+        - field: intake_pressure_bar
+          type: float
+        - field: temperature_c
+          type: float
+        - field: hydrocarbon_dew_point_c
+          type: float
+        - field: h2s_content_ppm
+          type: float
+
+  relations:
+    - collection: ncsp_pigging_runs
+      field: launcher_station_id
+      related_collection: ncsp_scada_valves
+      type: m2o
+
+  equipment_taxonomy:
+    system_code: NCSP_SYSTEM
+    segments:
+      - code: "OFFSHORE"
+        name: "371km 26-inch Offshore Trunkline (Rong Doi to Long Hai)"
+        stations:
+          - code: "KP0"
+            name: "Offshore Platform Pig Launcher"
+          - code: "LH"
+            name: "Long Hai Landfall Station & Isolation Valve"
+      - code: "ONSHORE_GPP"
+        name: "9km 26-inch Onshore Trunkline (Long Hai to Dinh Co)"
+        stations:
+          - code: "DC"
+            name: "Dinh Co Gas Processing Plant (GPP)"
+      - code: "ONSHORE_GDC"
+        name: "30.5km 16-inch Fuel Gas Pipeline (Dinh Co to Phu My)"
+        stations:
+          - code: "PM"
+            name: "Phu My Gas Distribution Center (GDC)"
+          - code: "BR"
+            name: "Ba Ria Power Plant Tie-in Station"
+
+business_flows:
+  - key: ncsp-pigging-esd-verification
+    name: "Pipeline Pigging Operation & SCADA ESD Valve Status Verification Flow"
+    description: "Verifies barrel pressure equalization and SCADA ESD valve interlocks before authorizing intelligent pigging launch sequences in high-pressure offshore/onshore gas trunklines."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_pigging_runs
+      filter:
+        status:
+          _eq: launch_sequence_initiated
+    nodes:
+      - key: read_pigging_run
+        name: "Read Pigging Run Parameters"
+        type: item-read
+        options:
+          collection: ncsp_pigging_runs
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - run_code
+              - pipeline_segment
+              - launcher_station_id
+              - tool_type
+        position_x: 1
+        position_y: 1
+
+      - key: read_scada_valves
+        name: "Read SCADA ESD & Barrel Valves"
+        type: item-read
+        options:
+          collection: ncsp_scada_valves
+          key: "{{read_pigging_run.launcher_station_id}}"
+          query:
+            fields:
+              - id
+              - station_code
+              - esd_valves_armed
+              - bypass_lineup_correct
+              - kicker_valve_open
+              - barrel_pressure_equalized
+              - launcher_pressure_bar
+              - mainline_pressure_bar
+        position_x: 20
+        position_y: 1
+
+      - key: verify_pigging_interlocks
+        name: "Evaluate SCADA Interlocks & Pressure Equalization"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_scada_valves:
+                  esd_valves_armed:
+                    _eq: true
+              - read_scada_valves:
+                  bypass_lineup_correct:
+                    _eq: true
+              - read_scada_valves:
+                  kicker_valve_open:
+                    _eq: true
+              - read_scada_valves:
+                  barrel_pressure_equalized:
+                    _eq: true
+        position_x: 40
+        position_y: 1
+
+      - key: authorize_pig_launch
+        name: "Authorize Pipeline Pig Launch"
+        type: item-update
+        options:
+          collection: ncsp_pigging_runs
+          key: "{{$trigger.key}}"
+          data:
+            status: launch_authorized
+            pig_signal_armed: true
+            launch_authorized_at: "{{$NOW}}"
+        position_x: 60
+        position_y: 1
+
+      - key: notify_launch_authorized
+        name: "Notify Gas Dispatch & Field Operations of Cleared Launch"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.gas_dispatcher_id}}"
+          subject: "Pig Launch Cleared: Interlocks Verified for Run {{read_pigging_run.run_code}}"
+          message: "Barrel equalized with mainline. SCADA ESD interlocks armed and bypass open. Authorized to open main pig trap door."
+        position_x: 80
+        position_y: 1
+
+      - key: abort_pig_launch
+        name: "Abort Launch Due to Interlock Violation"
+        type: item-update
+        options:
+          collection: ncsp_pigging_runs
+          key: "{{$trigger.key}}"
+          data:
+            status: launch_hold_esd_interlock
+            pig_signal_armed: false
+            alert_flag: esd_inhibit_or_pressure_differential
+        position_x: 60
+        position_y: 15
+
+      - key: notify_launch_abort
+        name: "Alert Pipeline Superintendent of Pig Launch Abort"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.pipeline_superintendent_id}}"
+          subject: "HOLD: Pigging Launch Aborted for Run {{read_pigging_run.run_code}}"
+          message: "Launch sequence aborted. SCADA reported unready ESD valve status or unequalized barrel pressure."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_pigging_run", "resolve"]
+      - ["read_pigging_run", "read_scada_valves", "resolve"]
+      - ["read_scada_valves", "verify_pigging_interlocks", "resolve"]
+      - ["verify_pigging_interlocks", "authorize_pig_launch", "resolve"]
+      - ["authorize_pig_launch", "notify_launch_authorized", "resolve"]
+      - ["verify_pigging_interlocks", "abort_pig_launch", "reject"]
+      - ["abort_pig_launch", "notify_launch_abort", "resolve"]
+
+rules:
+  - rule_id: NCSP-PIG-001
+    name: "Pig Trap Equalization Pressure Rule"
+    description: "Launcher barrel pressure must match mainline pressure within +/- 0.5 bar before kicker valve throttle."
+    severity: critical
+    condition: "abs(launcher_pressure_bar - mainline_pressure_bar) <= 0.5"
+    enforcement: strict_rejection
+    action: "Inhibit launcher trap interlock and alert pigging technician."
+
+  - rule_id: NCSP-CP-002
+    name: "Cathodic Protection Potential Safe Range"
+    description: "Subsea and onshore pipeline CP potential must remain between -850 mV and -1200 mV CSE per NACE SP0169."
+    severity: high
+    condition: "cp_potential_mv <= -850.0 && cp_potential_mv >= -1200.0"
+    enforcement: warning
+    action: "Log corrosion mitigation work order and dispatch technician."
+
+insights:
+  - name: "Pipeline Integrity & Gas Metering Delivery Live Board"
+    icon: "speed"
+    color: "#0D47A1"
+    note: "Real-time gas transmission flow, pressure profile, cathodic protection, and pigging operations for Nam Con Son Gas Pipeline."
+    panels:
+      - name: "Offshore Gas Delivery Rate (MMSCMD)"
+        type: metric
+        collection: ncsp_gas_metering
+        options:
+          field: delivery_rate_mmscmd
+          function: avg
+          decimals: 2
+          suffix: " MMSCMD"
+        position_x: 1
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "compress"
+        color: "#0288D1"
+
+      - name: "Dinh Co Terminal Intake Pressure (bar)"
+        type: metric
+        collection: ncsp_gas_metering
+        options:
+          field: intake_pressure_bar
+          function: avg
+          decimals: 1
+          suffix: " bar"
+        position_x: 19
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "speed"
+        color: "#2E7D32"
+
+      - name: "Cathodic Protection Potential (mV CSE)"
+        type: metric
+        collection: ncsp_pipeline_integrity
+        options:
+          field: cp_potential_mv
+          function: avg
+          decimals: 0
+          suffix: " mV"
+        position_x: 37
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "bolt"
+        color: "#EF6C00"
+
+      - name: "Active Pipeline Inspection & Pigging Runs"
+        type: metric
+        collection: ncsp_pigging_runs
+        options:
+          filter:
+            status:
+              _in:
+                - launch_sequence_initiated
+                - launch_authorized
+                - in_transit
+          function: count
+        position_x: 55
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "alt_route"
+        color: "#6A1B9A"
+
+      - name: "Gas Metering Delivery Stations (Dinh Co / Phu My / Ba Ria)"
+        type: list
+        collection: ncsp_gas_metering
+        options:
+          sortField: timestamp
+          sortDirection: desc
+          displayTemplate: "{{timestamp}} — Station {{station_name}}: Delivery {{delivery_rate_mmscmd}} MMSCMD | Intake {{intake_pressure_bar}} bar | H2S: {{h2s_content_ppm}} ppm"
+          limit: 6
+        position_x: 1
+        position_y: 13
+        width: 72
+        height: 16
+        icon: "gas_meter"
+
+      - name: "Pipeline Cathodic Protection & SCADA ESD Valve Health"
+        type: list
+        collection: ncsp_pipeline_integrity
+        options:
+          sortField: date_tested
+          sortDirection: desc
+          displayTemplate: "KP {{kilometer_post}} ({{segment_name}}): CP {{cp_potential_mv}} mV | Soil: {{soil_resistivity_ohm_m}} Ω-m | Anode: {{anode_current_ma}} mA | {{integrity_status}}"
+          limit: 6
+        position_x: 1
+        position_y: 29
+        width: 72
+        height: 16
+        icon: "health_and_safety"

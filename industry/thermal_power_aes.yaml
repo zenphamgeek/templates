@@ -1,0 +1,386 @@
+template_id: thermal_power_aes
+version: 1.0.0
+industry_vertical: thermal_power
+archetype: "AES Mong Duong Thermal Power Plant Archetype"
+
+metadata:
+  name: "AES Mong Duong Thermal Power Plant Resilience Template"
+  description: "Operational resilience, electrical isolation, and environmental emissions surveillance template for 2x560MW coal-fired thermal power plants based on the AES Mong Duong archetype."
+  status: VERIFIED
+  author: "Industry Template Architect & Engine Specialist"
+  approver: "Zen Phạm"
+  created_at: "2026-10-04"
+  tags:
+    - thermal_power
+    - cfb_boiler
+    - steam_turbine
+    - high_voltage
+    - loto
+    - lockbox
+    - cems
+    - emissions
+  regulatory_frameworks:
+    - "TCVN 7440:2005 Thermal Power Plant Emission Standards"
+    - "OSHA 1910.147 Control of Hazardous Energy (LOTO)"
+    - "Circular 10/2021/TT-BTNMT Environmental Monitoring Regulations"
+    - "NFPA 850 Recommended Practice for Fire Protection for Electric Generating Plants"
+
+taxonomy_and_fields:
+  collections:
+    - collection: aes_loto_isolations
+      name: "High-Voltage LOTO Isolations"
+      description: "Hazardous energy isolation permits and lockbox linkage for power generation assets."
+      fields:
+        - field: id
+          type: uuid
+        - field: loto_no
+          type: string
+        - field: equipment_tag
+          type: string
+        - field: voltage_class_kv
+          type: float
+        - field: status
+          type: string
+        - field: lockbox_id
+          type: uuid
+        - field: work_authorized
+          type: boolean
+        - field: isolation_witnessed_at
+          type: timestamp
+        - field: alert_flag
+          type: string
+
+    - collection: aes_lockbox_registers
+      name: "Lockbox (LBX) Safety Registers"
+      description: "Physical lockbox custody tracking isolation key deposits and field master padlocks."
+      fields:
+        - field: id
+          type: uuid
+        - field: lockbox_code
+          type: string
+        - field: breaker_racked_out
+          type: boolean
+        - field: earth_switch_closed
+          type: boolean
+        - field: padlocks_applied
+          type: boolean
+        - field: master_key_secured
+          type: boolean
+        - field: keys_deposited_count
+          type: integer
+        - field: custodian_id
+          type: uuid
+
+    - collection: aes_cems_telemetry
+      name: "CEMS Environmental Emissions"
+      description: "Continuous Emission Monitoring System telemetry measuring stack flue gas."
+      fields:
+        - field: id
+          type: uuid
+        - field: stack_id
+          type: string
+        - field: timestamp
+          type: timestamp
+        - field: so2_instantaneous
+          type: float
+        - field: nox_instantaneous
+          type: float
+        - field: dust_instantaneous
+          type: float
+        - field: co_instantaneous
+          type: float
+        - field: o2_percentage
+          type: float
+        - field: emission_compliance_status
+          type: string
+
+    - collection: aes_generation_units
+      name: "Generation Unit Availability & Performance"
+      description: "Boiler, turbine, and generator operational availability metrics."
+      fields:
+        - field: id
+          type: uuid
+        - field: unit_id
+          type: string
+        - field: recorded_date
+          type: date
+        - field: boiler_availability_pct
+          type: float
+        - field: turbine_availability_pct
+          type: float
+        - field: gross_generation_mwh
+          type: float
+        - field: equivalent_availability_factor
+          type: float
+
+  relations:
+    - collection: aes_loto_isolations
+      field: lockbox_id
+      related_collection: aes_lockbox_registers
+      type: m2o
+
+  equipment_taxonomy:
+    plant_code: AES_MONGDUONG
+    areas:
+      - code: "GEN_U1"
+        name: "Unit 1 Power Block (560 MW)"
+        systems:
+          - code: "B1"
+            name: "CFB Boiler Unit 1 & ESP"
+          - code: "ST1"
+            name: "Steam Turbine & Generator Unit 1"
+          - code: "FGD1"
+            name: "Seawater Flue Gas Desulfurization Unit 1"
+      - code: "GEN_U2"
+        name: "Unit 2 Power Block (560 MW)"
+        systems:
+          - code: "B2"
+            name: "CFB Boiler Unit 2 & ESP"
+          - code: "ST2"
+            name: "Steam Turbine & Generator Unit 2"
+          - code: "FGD2"
+            name: "Seawater Flue Gas Desulfurization Unit 2"
+      - code: "SWYD"
+        name: "High Voltage Switchyard (500kV / 220kV GIS)"
+
+business_flows:
+  - key: aes-loto-high-voltage-lockbox
+    name: "High-Voltage LOTO Lockbox (LBX) Verification & Isolation Approval Flow"
+    description: "Enforces strict physical lockbox verification (breaker racked out, earth switch closed, physical padlocks attached, master keys deposited) before authorizing electrical maintenance on high-voltage switchgear."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_loto_isolations
+      filter:
+        status:
+          _eq: isolation_submitted
+    nodes:
+      - key: read_isolation_request
+        name: "Read High-Voltage Isolation Request"
+        type: item-read
+        options:
+          collection: aes_loto_isolations
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - loto_no
+              - equipment_tag
+              - voltage_class_kv
+              - lockbox_id
+        position_x: 1
+        position_y: 1
+
+      - key: read_lockbox_status
+        name: "Read Physical Lockbox Status & Key Verification"
+        type: item-read
+        options:
+          collection: aes_lockbox_registers
+          key: "{{read_isolation_request.lockbox_id}}"
+          query:
+            fields:
+              - id
+              - lockbox_code
+              - breaker_racked_out
+              - earth_switch_closed
+              - padlocks_applied
+              - master_key_secured
+              - keys_deposited_count
+        position_x: 20
+        position_y: 1
+
+      - key: verify_lockbox_safety
+        name: "Verify Lockbox Isolation Safety Criteria"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_lockbox_status:
+                  breaker_racked_out:
+                    _eq: true
+              - read_lockbox_status:
+                  earth_switch_closed:
+                    _eq: true
+              - read_lockbox_status:
+                  padlocks_applied:
+                    _eq: true
+              - read_lockbox_status:
+                  master_key_secured:
+                    _eq: true
+        position_x: 40
+        position_y: 1
+
+      - key: authorize_isolation
+        name: "Authorize High-Voltage Isolation"
+        type: item-update
+        options:
+          collection: aes_loto_isolations
+          key: "{{$trigger.key}}"
+          data:
+            status: isolated_verified
+            work_authorized: true
+            isolation_witnessed_at: "{{$NOW}}"
+        position_x: 60
+        position_y: 1
+
+      - key: notify_loto_authorized
+        name: "Notify Maintenance Team of Verified Isolation"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.maintenance_supervisor_id}}"
+          subject: "LOTO Verified: Safe to Work on {{read_isolation_request.equipment_tag}} ({{read_isolation_request.voltage_class_kv}} kV)"
+          message: "Breakers racked out, earth switch closed, and lockbox secured. High-voltage isolation approved."
+        position_x: 80
+        position_y: 1
+
+      - key: reject_isolation
+        name: "Reject Isolation Due to Missing Safeguards"
+        type: item-update
+        options:
+          collection: aes_loto_isolations
+          key: "{{$trigger.key}}"
+          data:
+            status: isolation_verification_failed
+            work_authorized: false
+            alert_flag: incomplete_lockbox_isolation
+        position_x: 60
+        position_y: 15
+
+      - key: notify_loto_aborted
+        name: "Alert Shift Charge Engineer of Failed Isolation"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.shift_charge_engineer_id}}"
+          subject: "SAFETY ALERT: High-Voltage LOTO Verification Failed for {{read_isolation_request.equipment_tag}}"
+          message: "Isolation rejected: missing breaker rack-out, open earth switch, or unverified lockbox padlock."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_isolation_request", "resolve"]
+      - ["read_isolation_request", "read_lockbox_status", "resolve"]
+      - ["read_lockbox_status", "verify_lockbox_safety", "resolve"]
+      - ["verify_lockbox_safety", "authorize_isolation", "resolve"]
+      - ["authorize_isolation", "notify_loto_authorized", "resolve"]
+      - ["verify_lockbox_safety", "reject_isolation", "reject"]
+      - ["reject_isolation", "notify_loto_aborted", "resolve"]
+
+rules:
+  - rule_id: AES-LOTO-001
+    name: "Zero Voltage & Earth Switch Requirement"
+    description: "Switchgear above 1kV must have breakers racked out and earth switches mechanically latched before lockbox closure."
+    severity: critical
+    condition: "breaker_racked_out == true && earth_switch_closed == true"
+    enforcement: strict_rejection
+    action: "Block isolation authorization and trigger SCE inspection."
+
+  - rule_id: AES-CEMS-002
+    name: "TCVN 7440 Flue Gas SO2 Emission Cap"
+    description: "Continuous stack emissions of sulfur dioxide must not exceed 500 mg/Nm3 hourly average."
+    severity: high
+    condition: "so2_instantaneous <= 500.0"
+    enforcement: escalation
+    action: "Increase FGD limestone slurry circulation and log environmental anomaly."
+
+insights:
+  - name: "Boiler & Turbine Availability & CEMS Emissions Dashboard"
+    icon: "electric_bolt"
+    color: "#C2185B"
+    note: "Generation performance, unit availability, and continuous stack environmental surveillance for AES Mong Duong Power Plant."
+    panels:
+      - name: "Unit 1 CFB Boiler Availability (%)"
+        type: metric
+        collection: aes_generation_units
+        options:
+          field: boiler_availability_pct
+          function: avg
+          decimals: 1
+          suffix: "%"
+        position_x: 1
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "solar_power"
+        color: "#2E7D32"
+
+      - name: "Unit 2 Steam Turbine Availability (%)"
+        type: metric
+        collection: aes_generation_units
+        options:
+          field: turbine_availability_pct
+          function: avg
+          decimals: 1
+          suffix: "%"
+        position_x: 19
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "turborepo"
+        color: "#1565C0"
+
+      - name: "CEMS SO2 Instantaneous (mg/Nm³) [Limit: 500]"
+        type: metric
+        collection: aes_cems_telemetry
+        options:
+          field: so2_instantaneous
+          function: avg
+          decimals: 1
+          suffix: " mg/Nm³"
+        position_x: 37
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "air"
+        color: "#EF6C00"
+
+      - name: "CEMS Dust / PM (mg/Nm³) [Limit: 100]"
+        type: metric
+        collection: aes_cems_telemetry
+        options:
+          field: dust_instantaneous
+          function: avg
+          decimals: 1
+          suffix: " mg/Nm³"
+        position_x: 55
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "cloud"
+        color: "#D81B60"
+
+      - name: "CEMS Live Flue Gas Emissions Telemetry"
+        type: list
+        collection: aes_cems_telemetry
+        options:
+          sortField: timestamp
+          sortDirection: desc
+          displayTemplate: "{{timestamp}} — Stack {{stack_id}}: SO2 {{so2_instantaneous}} mg/Nm³ | NOx {{nox_instantaneous}} mg/Nm³ | Dust {{dust_instantaneous}} mg/Nm³ | {{emission_compliance_status}}"
+          limit: 6
+        position_x: 1
+        position_y: 13
+        width: 72
+        height: 16
+        icon: "monitoring"
+
+      - name: "AES Active High-Voltage LOTO Lockbox Status"
+        type: list
+        collection: aes_loto_isolations
+        options:
+          filter:
+            status:
+              _in:
+                - isolation_submitted
+                - isolated_verified
+          sortField: date_created
+          sortDirection: desc
+          displayTemplate: "LOTO #{{loto_no}}: {{equipment_tag}} ({{voltage_class_kv}} kV) — Status: {{status}}"
+          limit: 6
+        position_x: 1
+        position_y: 29
+        width: 72
+        height: 16
+        icon: "lock"

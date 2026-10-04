@@ -1,0 +1,540 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://verticalrisk.io/schemas/industry_template_schema.json",
+  "title": "Vertical Resilience Industry Template Schema",
+  "description": "JSON Schema governing parameterized Industry Templates (archetype, taxonomy, flows, rules, insights) across Vertical Resilience sectors.",
+  "type": "object",
+  "required": [
+    "template_id",
+    "version",
+    "industry_vertical",
+    "archetype",
+    "metadata",
+    "taxonomy_and_fields",
+    "business_flows",
+    "rules",
+    "insights"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "template_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+$",
+      "description": "Unique machine-readable identifier for the industry template"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?$",
+      "description": "SemVer string indicating the template version"
+    },
+    "industry_vertical": {
+      "type": "string",
+      "enum": [
+        "petrochem_fertilizer",
+        "thermal_power",
+        "gas_midstream_pipeline",
+        "oil_gas_offshore",
+        "chemical",
+        "renewables",
+        "mining_metals",
+        "pharmaceutical_gxp"
+      ],
+      "description": "Standardized industry vertical category"
+    },
+    "archetype": {
+      "type": "string",
+      "minLength": 3,
+      "description": "Reference plant or asset archetype name (e.g. Phu My Fertilizer Plant, AES Mong Duong, Nam Con Son Pipeline)"
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Human-readable display name for the industry template"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "description": "Detailed explanation of the plant archetype, scope, and operational resilience objectives"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PROPOSED",
+            "SPECIFIED",
+            "SCAFFOLDED",
+            "IMPLEMENTED",
+            "VERIFIED",
+            "ACCEPTED",
+            "DEFERRED",
+            "SUPERSEDED"
+          ],
+          "description": "Canonical lifecycle status per VerticalRisk architecture rules"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author of this template"
+        },
+        "approver": {
+          "type": "string",
+          "description": "Approving authority (default Zen Phạm per RACI rules)"
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Date or ISO timestamp of template creation"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Search and categorization tags"
+        },
+        "regulatory_frameworks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Applicable standards/regulations (e.g. OSHA 1910.119, TCVN, ASME B31.8, NFPA)"
+        }
+      }
+    },
+    "taxonomy_and_fields": {
+      "type": "object",
+      "required": [
+        "collections"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "collections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "collection",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "collection": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$",
+                "description": "Database table / collection name"
+              },
+              "name": {
+                "type": "string",
+                "description": "Human-readable collection name"
+              },
+              "description": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "field",
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9_]+$"
+                    },
+                    "type": {
+                      "type": "string"
+                    },
+                    "schema": {
+                      "type": "object"
+                    },
+                    "meta": {
+                      "type": "object"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "collection",
+              "field",
+              "related_collection"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "collection": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "related_collection": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "m2o",
+                  "o2m",
+                  "m2m"
+                ]
+              }
+            }
+          }
+        },
+        "equipment_taxonomy": {
+          "type": "object",
+          "description": "Plant asset and equipment hierarchy taxonomy"
+        }
+      }
+    },
+    "business_flows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "trigger",
+          "nodes",
+          "edges"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9_-]+$",
+            "description": "Unique key identifying the business flow"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "description": "Descriptive display name of the flow"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed business objective of the workflow"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "default": "active"
+          },
+          "accountability": {
+            "type": "string",
+            "enum": [
+              "activity",
+              "all",
+              "system"
+            ],
+            "default": "activity"
+          },
+          "trigger": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "event",
+                  "action",
+                  "filter",
+                  "webhook",
+                  "schedule",
+                  "manual"
+                ]
+              },
+              "scope": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "collections": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "filter": {
+                "type": "object"
+              },
+              "options": {
+                "type": "object"
+              }
+            }
+          },
+          "nodes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "type",
+                "options"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]+$",
+                  "description": "Unique node key in this flow"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "item-read",
+                    "condition",
+                    "item-update",
+                    "item-create",
+                    "notification",
+                    "transform",
+                    "trigger",
+                    "sleep"
+                  ],
+                  "description": "Stock operation type permitted under VerticalRisk no-code architecture"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Human-readable step name"
+                },
+                "options": {
+                  "type": "object",
+                  "description": "Stock operation configuration options"
+                },
+                "position_x": {
+                  "type": "integer"
+                },
+                "position_y": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "edges": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": [
+                {
+                  "type": "string",
+                  "description": "Source node key or $trigger"
+                },
+                {
+                  "type": "string",
+                  "description": "Target node key"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "resolve",
+                    "reject",
+                    "always"
+                  ],
+                  "description": "Edge transition outcome"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "rule_id",
+          "name",
+          "description"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ],
+            "default": "high"
+          },
+          "condition": {
+            "type": [
+              "string",
+              "object"
+            ]
+          },
+          "enforcement": {
+            "type": "string",
+            "enum": [
+              "strict_rejection",
+              "warning",
+              "escalation",
+              "approval_gate"
+            ],
+            "default": "strict_rejection"
+          },
+          "action": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "insights": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "icon",
+          "color",
+          "panels"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "description": "Dashboard name"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Material symbols icon key"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Hexadecimal color code for the dashboard theme"
+          },
+          "note": {
+            "type": "string",
+            "description": "Contextual note or purpose of this insight dashboard"
+          },
+          "panels": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "type",
+                "collection",
+                "options",
+                "position_x",
+                "position_y",
+                "width",
+                "height"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 2,
+                  "description": "Panel title"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "metric",
+                    "list",
+                    "pie-chart",
+                    "bar-chart",
+                    "time-series",
+                    "line-chart"
+                  ],
+                  "description": "Panel visualizer type"
+                },
+                "collection": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9_]+$",
+                  "description": "Source collection for panel data"
+                },
+                "options": {
+                  "type": "object",
+                  "description": "Panel display options (functions, filters, templates, formatting)"
+                },
+                "position_x": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 72,
+                  "description": "Starting column (1-indexed, max grid 72)"
+                },
+                "position_y": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Starting row (1-indexed)"
+                },
+                "width": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 72,
+                  "description": "Panel width in columns"
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Panel height in grid units"
+                },
+                "icon": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "show_header": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

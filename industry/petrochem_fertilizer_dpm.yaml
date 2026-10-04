@@ -1,0 +1,576 @@
+template_id: petrochem_fertilizer_dpm
+version: 1.0.0
+industry_vertical: petrochem_fertilizer
+archetype: "Phu My Fertilizer Plant (DPM) Archetype"
+
+metadata:
+  name: "Phu My Fertilizer & Petrochem Resilience Template"
+  description: "Comprehensive operational resilience, process safety, and plant management template for ammonia/urea production complexes based on the Phu My Fertilizer Plant archetype."
+  status: VERIFIED
+  author: "Industry Template Architect & Engine Specialist"
+  approver: "Zen Phạm"
+  created_at: "2026-10-04"
+  tags:
+    - petrochem
+    - fertilizer
+    - ammonia
+    - urea
+    - process_safety
+    - ptw
+    - moc
+    - syngas
+  regulatory_frameworks:
+    - "OSHA 1910.119 Process Safety Management"
+    - "TCVN 5334:2007 Safety in Petrochemical Production"
+    - "CCPS Guidelines for Process Safety"
+    - "TCVN 3288:1979 Ventilation and Air Purity in Chemical Facilities"
+
+taxonomy_and_fields:
+  collections:
+    - collection: hse_permits
+      name: "Permits to Work (PTW)"
+      description: "Electronic PTW register for high-hazard work execution."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_no
+          type: string
+        - field: permit_type
+          type: string
+        - field: title
+          type: string
+        - field: status
+          type: string
+        - field: plant_unit
+          type: string
+        - field: gas_clearance
+          type: string
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
+    - collection: hse_gas_tests
+      name: "Atmospheric Gas Tests"
+      description: "Gas testing logs before and during hot work / confined space entry."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_id
+          type: uuid
+        - field: gas_ch4_lel_percent
+          type: float
+        - field: gas_o2_percent
+          type: float
+        - field: gas_h2s_ppm
+          type: float
+        - field: gas_co_ppm
+          type: float
+        - field: tester_id
+          type: uuid
+        - field: test_timestamp
+          type: timestamp
+        - field: atmospheric_status
+          type: string
+
+    - collection: hse_moc_changes
+      name: "Management of Change (MOC)"
+      description: "Technical, organizational, and operational change management."
+      fields:
+        - field: id
+          type: uuid
+        - field: moc_no
+          type: string
+        - field: title
+          type: string
+        - field: status
+          type: string
+        - field: change_category
+          type: string
+        - field: process_safety_status
+          type: string
+        - field: operations_status
+          type: string
+        - field: plant_manager_status
+          type: string
+        - field: ready_for_implementation
+          type: boolean
+
+    - collection: dpm_compressor_telemetry
+      name: "103-J Syngas Compressor Telemetry"
+      description: "Real-time mechanical and process telemetry of the multi-stage 103-J synthesis gas compressor."
+      fields:
+        - field: id
+          type: uuid
+        - field: tag_id
+          type: string
+        - field: stage_no
+          type: integer
+        - field: vibration_mm_s
+          type: float
+        - field: suction_pressure_bar
+          type: float
+        - field: discharge_pressure_bar
+          type: float
+        - field: bearing_temp_c
+          type: float
+        - field: timestamp
+          type: timestamp
+
+    - collection: dpm_plant_kpis
+      name: "Phu My Plant Performance KPIs"
+      description: "Aggregated plant KPIs for ammonia, urea, and utility trains."
+      fields:
+        - field: id
+          type: uuid
+        - field: recorded_date
+          type: date
+        - field: oee_rate
+          type: float
+        - field: ammonia_production_mt
+          type: float
+        - field: urea_production_mt
+          type: float
+        - field: energy_consumption_gj_mt
+          type: float
+
+    - collection: hse_incidents
+      name: "Safety Incidents & Metrics"
+      description: "HSE incident logging and rolling frequency rates."
+      fields:
+        - field: id
+          type: uuid
+        - field: trir_value
+          type: float
+        - field: ltir_value
+          type: float
+        - field: safe_manhours
+          type: integer
+
+  relations:
+    - collection: hse_gas_tests
+      field: permit_id
+      related_collection: hse_permits
+      type: m2o
+
+  equipment_taxonomy:
+    plant_code: DPM_PHUMY
+    areas:
+      - code: "100"
+        name: "Ammonia Synthesis Area"
+        systems:
+          - code: "101"
+            name: "Primary Steam Reformer (101-B)"
+          - code: "103"
+            name: "Syngas Compressor Train (103-J / 103-JT)"
+          - code: "105"
+            name: "Ammonia Synthesis Converter Loop (105-D)"
+      - code: "200"
+        name: "Urea Granulation Area"
+      - code: "300"
+        name: "Utilities & Power Cogeneration"
+
+business_flows:
+  - key: dpm-ptw-hot-work-gas-check
+    name: "e-PTW Hot Work with Strict Gas Testing Check"
+    description: "Evaluates atmospheric gas testing for Hot Work PTWs against stringent petrochemical safety limits: CH4 < 10% LEL, O2 between 19.5% and 23.5%, and H2S < 10 ppm. Automatically authorizes work or auto-rejects and issues safety notifications."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_permits
+      filter:
+        status:
+          _eq: gas_test_submitted
+        permit_type:
+          _eq: hot_work
+    nodes:
+      - key: read_gas_test
+        name: "Read Latest Atmospheric Gas Test"
+        type: item-read
+        options:
+          collection: hse_gas_tests
+          query:
+            filter:
+              permit_id:
+                _eq: "{{$trigger.key}}"
+            sort:
+              - "-test_timestamp"
+            limit: 1
+            fields:
+              - id
+              - permit_id
+              - gas_ch4_lel_percent
+              - gas_o2_percent
+              - gas_h2s_ppm
+              - gas_co_ppm
+        position_x: 1
+        position_y: 1
+
+      - key: evaluate_gas_limits
+        name: "Evaluate Strict Atmospheric Thresholds"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_gas_test:
+                  gas_ch4_lel_percent:
+                    _lt: 10.0
+              - read_gas_test:
+                  gas_o2_percent:
+                    _gte: 19.5
+              - read_gas_test:
+                  gas_o2_percent:
+                    _lte: 23.5
+              - read_gas_test:
+                  gas_h2s_ppm:
+                    _lt: 10.0
+        position_x: 20
+        position_y: 1
+
+      - key: approve_ptw
+        name: "Approve Hot Work PTW"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: approved
+            gas_clearance: passed
+            work_authorized: true
+        position_x: 40
+        position_y: 1
+
+      - key: notify_approval
+        name: "Notify Field Supervisor of Safe Gas Clearance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.supervisor_id}}"
+          subject: "PTW Approved: Atmosphere Safe for Hot Work (Permit #{{$trigger.key}})"
+          message: "Gas testing confirmed CH4 < 10% LEL, O2 19.5-23.5%, and H2S < 10 ppm. Hot work authorized."
+        position_x: 60
+        position_y: 1
+
+      - key: reject_ptw
+        name: "Auto-Reject PTW Due to Hazardous Atmosphere"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: auto_rejected
+            gas_clearance: failed_hazardous_atmosphere
+            work_authorized: false
+            rejection_reason: "Violated strict atmospheric limits: CH4 must be <10% LEL, O2 19.5-23.5%, H2S <10 ppm."
+        position_x: 40
+        position_y: 15
+
+      - key: notify_rejection
+        name: "Alert Safety Officer of PTW Auto-Rejection"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.hse_officer_id}}"
+          subject: "CRITICAL: PTW Auto-Rejected for Hazardous Atmosphere (Permit #{{$trigger.key}})"
+          message: "Hot Work PTW auto-rejected. Flammable or toxic gas limits breached. Immediate area ventilation required."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_gas_test", "resolve"]
+      - ["read_gas_test", "evaluate_gas_limits", "resolve"]
+      - ["evaluate_gas_limits", "approve_ptw", "resolve"]
+      - ["approve_ptw", "notify_approval", "resolve"]
+      - ["evaluate_gas_limits", "reject_ptw", "reject"]
+      - ["reject_ptw", "notify_rejection", "resolve"]
+
+  - key: dpm-moc-3stage-review
+    name: "MOC 3-Stage Multi-discipline Review"
+    description: "Sequential 3-Stage Multi-discipline Review (Process Safety -> Operations -> Plant Manager) enforcing strict Stage-Gate signoffs before plant modifications can proceed."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_moc_changes
+      filter:
+        status:
+          _eq: in_review
+    nodes:
+      - key: read_moc
+        name: "Read MOC Technical Review State"
+        type: item-read
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - moc_no
+              - process_safety_status
+              - operations_status
+              - plant_manager_status
+        position_x: 1
+        position_y: 1
+
+      - key: check_process_safety
+        name: "Gate 1: Check Process Safety Approval"
+        type: condition
+        options:
+          filter:
+            read_moc:
+              process_safety_status:
+                _eq: approved
+        position_x: 15
+        position_y: 1
+
+      - key: advance_to_operations
+        name: "Advance MOC to Operations Review"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: operations_review_pending
+        position_x: 30
+        position_y: 1
+
+      - key: notify_operations_reviewer
+        name: "Notify Operations Manager"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.operations_manager_id}}"
+          subject: "MOC Stage 2 Action Required: Operations Review for MOC #{{read_moc.moc_no}}"
+          message: "Process Safety has approved MOC #{{read_moc.moc_no}}. Please perform operational feasibility review."
+        position_x: 45
+        position_y: 1
+
+      - key: check_operations
+        name: "Gate 2: Check Operations Approval"
+        type: condition
+        options:
+          filter:
+            read_moc:
+              operations_status:
+                _eq: approved
+        position_x: 30
+        position_y: 12
+
+      - key: advance_to_plant_manager
+        name: "Advance MOC to Plant Manager Sign-off"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: plant_manager_review_pending
+        position_x: 45
+        position_y: 12
+
+      - key: notify_plant_manager
+        name: "Notify Plant Director Zen Pham"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.plant_manager_id}}"
+          subject: "MOC Stage 3 Final Sign-off: MOC #{{read_moc.moc_no}}"
+          message: "Process Safety and Operations have approved MOC #{{read_moc.moc_no}}. Plant Manager final authorization required."
+        position_x: 60
+        position_y: 12
+
+      - key: check_plant_manager
+        name: "Gate 3: Check Plant Manager Final Approval"
+        type: condition
+        options:
+          filter:
+            read_moc:
+              plant_manager_status:
+                _eq: approved
+        position_x: 30
+        position_y: 24
+
+      - key: finalize_moc_approval
+        name: "Finalize MOC Authorization"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: approved
+            ready_for_implementation: true
+        position_x: 45
+        position_y: 24
+
+      - key: notify_moc_authorized
+        name: "Broadcast MOC Final Authorization"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.requester_id}}"
+          subject: "MOC Approved: Full Authorization Granted for MOC #{{read_moc.moc_no}}"
+          message: "MOC has passed Process Safety, Operations, and Plant Manager approvals. Ready for implementation."
+        position_x: 60
+        position_y: 24
+
+      - key: reject_moc
+        name: "Reject MOC at Gate"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: rejected
+            ready_for_implementation: false
+        position_x: 45
+        position_y: 36
+
+      - key: notify_moc_rejection
+        name: "Notify MOC Requester of Rejection"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.requester_id}}"
+          subject: "MOC Gate Rejection: MOC #{{read_moc.moc_no}}"
+          message: "MOC #{{read_moc.moc_no}} did not satisfy stage-gate criteria and has been marked as rejected."
+        position_x: 60
+        position_y: 36
+
+    edges:
+      - ["$trigger", "read_moc", "resolve"]
+      - ["read_moc", "check_process_safety", "resolve"]
+      - ["check_process_safety", "advance_to_operations", "resolve"]
+      - ["check_process_safety", "reject_moc", "reject"]
+      - ["advance_to_operations", "notify_operations_reviewer", "resolve"]
+      - ["notify_operations_reviewer", "check_operations", "resolve"]
+      - ["check_operations", "advance_to_plant_manager", "resolve"]
+      - ["check_operations", "reject_moc", "reject"]
+      - ["advance_to_plant_manager", "notify_plant_manager", "resolve"]
+      - ["notify_plant_manager", "check_plant_manager", "resolve"]
+      - ["check_plant_manager", "finalize_moc_approval", "resolve"]
+      - ["check_plant_manager", "reject_moc", "reject"]
+      - ["finalize_moc_approval", "notify_moc_authorized", "resolve"]
+      - ["reject_moc", "notify_moc_rejection", "resolve"]
+
+rules:
+  - rule_id: DPM-PSM-001
+    name: "Hot Work Strict Flammable Gas Limit"
+    description: "Atmospheric combustible gas level must be strictly under 10% LEL prior to issuing Hot Work permits in the ammonia/urea complex."
+    severity: critical
+    condition: "gas_ch4_lel_percent < 10.0"
+    enforcement: strict_rejection
+    action: "Block permit issuance and initiate hazardous gas evacuation."
+
+  - rule_id: DPM-MOC-002
+    name: "3-Stage Separation of Duty in MOC Approvals"
+    description: "Process Safety, Operations, and Plant Manager approvals must be executed by distinct authorized personnel without self-approval."
+    severity: high
+    condition: "process_safety_approver != operations_approver && operations_approver != plant_manager_approver"
+    enforcement: approval_gate
+    action: "Enforce multi-discipline sequential signoff gate."
+
+insights:
+  - name: "Ammonia Synthesis Unit (103-J Syngas Compressor) Live KPI Dashboard"
+    icon: "precision_manufacturing"
+    color: "#1B5E20"
+    note: "Real-time process safety, equipment health, and risk barrier surveillance for Phu My Ammonia Synthesis Unit 100-Area."
+    panels:
+      - name: "Ammonia Synloop OEE (%)"
+        type: metric
+        collection: dpm_plant_kpis
+        options:
+          field: oee_rate
+          function: avg
+          decimals: 1
+          suffix: "%"
+        position_x: 1
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "trending_up"
+        color: "#2E7D32"
+
+      - name: "Plant 12-Month Rolling TRIR"
+        type: metric
+        collection: hse_incidents
+        options:
+          field: trir_value
+          function: avg
+          decimals: 2
+        position_x: 19
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "health_and_safety"
+        color: "#1565C0"
+
+      - name: "Active Hot Work & High Risk PTWs"
+        type: metric
+        collection: hse_permits
+        options:
+          filter:
+            status:
+              _in:
+                - approved
+                - active
+          function: count
+        position_x: 37
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "assignment"
+        color: "#EF6C00"
+
+      - name: "MOCs in Multi-Discipline Review"
+        type: metric
+        collection: hse_moc_changes
+        options:
+          filter:
+            status:
+              _in:
+                - in_review
+                - operations_review_pending
+                - plant_manager_review_pending
+          function: count
+        position_x: 55
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "published_with_changes"
+        color: "#6A1B9A"
+
+      - name: "103-J Syngas Compressor Operating Telemetry"
+        type: list
+        collection: dpm_compressor_telemetry
+        options:
+          filter:
+            tag_id:
+              _eq: "103-J"
+          sortField: timestamp
+          sortDirection: desc
+          displayTemplate: "{{timestamp}} — Stage {{stage_no}} Vibration: {{vibration_mm_s}} mm/s | Discharge: {{discharge_pressure_bar}} bar | Temp: {{bearing_temp_c}}°C"
+          limit: 6
+        position_x: 1
+        position_y: 13
+        width: 72
+        height: 16
+        icon: "speed"
+
+      - name: "Phu My Ammonia Unit Active Permits & Isolations"
+        type: list
+        collection: hse_permits
+        options:
+          filter:
+            status:
+              _eq: active
+            plant_unit:
+              _eq: "Ammonia Synthesis 100-Area"
+          sortField: date_created
+          sortDirection: desc
+          displayTemplate: "PTW #{{permit_no}}: {{title}} ({{permit_type}}) — Gas Clearance: {{gas_clearance}}"
+          limit: 6
+        position_x: 1
+        position_y: 29
+        width: 72
+        height: 16
+        icon: "shield"
