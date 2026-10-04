@@ -1,0 +1,455 @@
+template_id: mining_minerals_tkv
+version: 1.0.0
+industry_vertical: mining_metals
+archetype: "Vinacomin & Masan High-Tech Minerals Archetype"
+
+metadata:
+  name: "Vinacomin & Masan High-Tech Minerals Mining Resilience Template"
+  description: "Operational resilience, underground shaft ventilation, methane (CH4) drainage interlocks, open-pit slope stability radar, and tailings storage facility (TSF) integrity monitoring for coal and polymetallic mining operations."
+  status: VERIFIED
+  author: "Industry Template Architect & Mining Specialist"
+  approver: "Zen Phạm"
+  created_at: "2026-10-04"
+  tags:
+    - mining
+    - minerals
+    - coal
+    - underground_ventilation
+    - methane_ch4
+    - slope_stability
+    - tailings_dam
+    - blasting
+  regulatory_frameworks:
+    - "QCVN 01:2011/BCT National Technical Regulation on Safety in Underground Coal Mining"
+    - "TCVN 5178:1990 Safety in Surface Mining and Quarrying"
+    - "ICMM Global Industry Standard on Tailings Management (GISTM)"
+    - "OSHA 30 CFR Federal Mine Safety and Health Standards"
+
+taxonomy_and_fields:
+  collections:
+    - collection: tkv_underground_ventilation
+      name: "Underground Shaft Atmospheric Telemetry"
+      description: "Continuous telemetry measuring methane (CH4), air velocity, and carbon monoxide in underground mine shafts and longwall working faces."
+      fields:
+        - field: id
+          type: uuid
+        - field: sensor_tag
+          type: string
+        - field: shaft_code
+          type: string
+        - field: methane_ch4_percent
+          type: float
+        - field: air_velocity_m_s
+          type: float
+        - field: co_ppm
+          type: float
+        - field: ventilation_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: tkv_slope_stability
+      name: "Open-Pit Slope Stability Radar"
+      description: "Interferometric radar monitoring millimeter-scale bench slope deformation and displacement velocity in surface pits."
+      fields:
+        - field: id
+          type: uuid
+        - field: radar_id
+          type: string
+        - field: bench_sector
+          type: string
+        - field: cumulative_displacement_mm
+          type: float
+        - field: displacement_velocity_mm_day
+          type: float
+        - field: stability_risk_index
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: tkv_blasting_permits
+      name: "Controlled Blasting & Evacuation Clearances"
+      description: "Electronic blasting permits requiring radial perimeter evacuation verification and seismic vibration clearance."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_no
+          type: string
+        - field: bench_sector
+          type: string
+        - field: explosive_charge_kg
+          type: float
+        - field: perimeter_swept
+          type: boolean
+        - field: evacuation_completed
+          type: boolean
+        - field: status
+          type: string
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
+    - collection: tkv_tailings_dam_sensors
+      name: "Tailings Dam Piezometer & Phreatic Sensors"
+      description: "Pore water pressure and phreatic surface levels in downstream embankment tailings storage facilities."
+      fields:
+        - field: id
+          type: uuid
+        - field: piezometer_tag
+          type: string
+        - field: dam_sector
+          type: string
+        - field: pore_pressure_kpa
+          type: float
+        - field: phreatic_level_m
+          type: float
+        - field: safety_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: tkv_mine_kpis
+      name: "Mine Production & Safety Aggregated KPIs"
+      description: "Aggregated metrics for extracted mineral volume, methane drainage recovery, and open-pit safety."
+      fields:
+        - field: id
+          type: uuid
+        - field: recorded_date
+          type: date
+        - field: raw_coal_output_mt
+          type: float
+        - field: tungsten_concentrate_mt
+          type: float
+        - field: ch4_drainage_efficiency_pct
+          type: float
+        - field: active_slope_alarms
+          type: integer
+
+  relations:
+    - collection: tkv_blasting_permits
+      field: bench_sector
+      related_collection: tkv_slope_stability
+      type: m2o
+
+  equipment_taxonomy:
+    plant_code: TKV_QUANGNINH_MINES
+    areas:
+      - code: "UG_MAOKHE"
+        name: "Mao Khe Underground Coal Mine (-150m to -350m)"
+        systems:
+          - code: "LW1"
+            name: "Mechanized Longwall Face 1"
+          - code: "VENT_MAIN"
+            name: "Main Exhaust Ventilation Fan Station"
+          - code: "METH_DRAIN"
+            name: "Surface Gas Drainage Vacuum Plant"
+      - code: "OP_COCSAU"
+        name: "Coc Sau Open-Pit Surface Coal Mine"
+        systems:
+          - code: "NORTH_WALL"
+            name: "North Pit Wall Highwall Benches"
+          - code: "HAUL_ROAD_A"
+            name: "Primary Overburden Haulage Ramp"
+      - code: "NUIDAO_TSF"
+        name: "Nui Phao Polymetallic Tailings Storage Facility"
+        systems:
+          - code: "DAM_CREST"
+            name: "Downstream Embankment Crest & Piezometer Array"
+          - code: "SPILLWAY"
+            name: "Emergency Decant Tower and Flood Spillway"
+
+business_flows:
+  - key: tkv-ch4-ventilation-safety-trip
+    name: "Underground Methane (CH4) Safety Interlock Flow"
+    description: "Evaluates underground return airway methane concentration. If CH4 exceeds 1.0%, automatically triggers power trip to longwall shearer and escalates ventilation airflow."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_underground_ventilation
+    nodes:
+      - key: read_ch4_telemetry
+        name: "Read Shaft Methane & Airflow Telemetry"
+        type: item-read
+        options:
+          collection: tkv_underground_ventilation
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sensor_tag
+              - shaft_code
+              - methane_ch4_percent
+              - air_velocity_m_s
+              - ventilation_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_ch4_safety_limit
+        name: "Check if Methane Exceeds Safety Limit (>= 1.0%)"
+        type: condition
+        options:
+          filter:
+            read_ch4_telemetry:
+              methane_ch4_percent:
+                _gte: 1.0
+        position_x: 25
+        position_y: 1
+
+      - key: execute_shearer_power_trip
+        name: "Trip Power to Longwall Shearer & Alert Mine Safety"
+        type: item-update
+        options:
+          collection: tkv_underground_ventilation
+          key: "{{$trigger.key}}"
+          data:
+            ventilation_status: METHANE_INTERLOCK_TRIPPED
+        position_x: 50
+        position_y: 1
+
+      - key: broadcast_underground_evacuation
+        name: "Broadcast Shaft Evacuation Alert to Underground Shift"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.shaft_shift_leader_id}}"
+          subject: "EMERGENCY: Methane Gas Interlock Tripped in Shaft {{read_ch4_telemetry.shaft_code}}"
+          message: "Critical CH4 level ({{read_ch4_telemetry.methane_ch4_percent}}%) detected at {{read_ch4_telemetry.sensor_tag}}. Power disconnected to face equipment. Evacuate intake airway immediately."
+        position_x: 75
+        position_y: 1
+
+      - key: confirm_normal_ventilation
+        name: "Confirm Safe Atmospheric Condition"
+        type: transform
+        options:
+          format: json
+          expression: "Methane level within QCVN 01:2011/BCT safe limits (< 1.0%)."
+        position_x: 50
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_ch4_telemetry", "resolve"]
+      - ["read_ch4_telemetry", "verify_ch4_safety_limit", "resolve"]
+      - ["verify_ch4_safety_limit", "execute_shearer_power_trip", "resolve"]
+      - ["execute_shearer_power_trip", "broadcast_underground_evacuation", "resolve"]
+      - ["verify_ch4_safety_limit", "confirm_normal_ventilation", "reject"]
+
+  - key: tkv-blasting-evacuation-ptw
+    name: "Open-Pit Blasting Clearance & Perimeter Verification Flow"
+    description: "Enforces 100% perimeter guard sweep, explosive safety clearance, and slope stability check before firing pit blast rounds."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - tkv_blasting_permits
+      filter:
+        status:
+          _eq: blast_submitted
+    nodes:
+      - key: read_blast_permit
+        name: "Read Blasting Permit & Evacuation Record"
+        type: item-read
+        options:
+          collection: tkv_blasting_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - bench_sector
+              - explosive_charge_kg
+              - perimeter_swept
+              - evacuation_completed
+        position_x: 1
+        position_y: 1
+
+      - key: verify_blast_clearance_safeguards
+        name: "Verify Blast Perimeter Swept and Evacuated"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_blast_permit:
+                  perimeter_swept:
+                    _eq: true
+              - read_blast_permit:
+                  evacuation_completed:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_blast_initiation
+        name: "Authorize Controlled Blasting Sequence"
+        type: item-update
+        options:
+          collection: tkv_blasting_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: blast_authorized
+            work_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_blasting_controller
+        name: "Notify Blasting Controller of Safe Clearance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.blasting_controller_id}}"
+          subject: "Blasting Authorized: {{read_blast_permit.permit_no}} on Bench {{read_blast_permit.bench_sector}}"
+          message: "All perimeter guards stationed and personnel accounted for. Authorized to initiate firing sequence."
+        position_x: 75
+        position_y: 1
+
+      - key: reject_blast_clearance
+        name: "Reject Blasting Clearance Due to Incomplete Evacuation"
+        type: item-update
+        options:
+          collection: tkv_blasting_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: blast_rejected_incomplete_evacuation
+            work_authorized: false
+            rejection_reason: "Perimeter sweep incomplete or personnel remain inside designated blast exclusion radius."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_pit_superintendent
+        name: "Alert Pit Superintendent of Aborted Blast"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.pit_superintendent_id}}"
+          subject: "BLAST ABORTED: Incomplete Evacuation on Bench {{read_blast_permit.bench_sector}}"
+          message: "Blasting permit {{read_blast_permit.permit_no}} rejected. Firing sequence blocked."
+        position_x: 75
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_blast_permit", "resolve"]
+      - ["read_blast_permit", "verify_blast_clearance_safeguards", "resolve"]
+      - ["verify_blast_clearance_safeguards", "authorize_blast_initiation", "resolve"]
+      - ["authorize_blast_initiation", "notify_blasting_controller", "resolve"]
+      - ["verify_blast_clearance_safeguards", "reject_blast_clearance", "reject"]
+      - ["reject_blast_clearance", "alert_pit_superintendent", "resolve"]
+
+rules:
+  - rule_id: TKV-CH4-VENT-001
+    name: "Underground Shaft CH4 Concentration Safety Ceiling"
+    description: "Methane gas concentration in working faces must not exceed 0.75% for routine work, with mandatory power isolation at 1.0%."
+    severity: critical
+    condition: "methane_ch4_percent <= 0.75"
+    enforcement: strict_rejection
+    action: "Automatically isolate electric motors, switch to high-volume secondary ventilation, and evacuate miners."
+
+  - rule_id: TKV-TSF-PORE-002
+    name: "Tailings Embankment Pore Water Pressure Limit"
+    description: "Piezometer water pore pressure must not exceed 150 kPa to prevent foundation liquefaction and embankment breaching."
+    severity: high
+    condition: "pore_pressure_kpa <= 150.0"
+    enforcement: escalation
+    action: "Trigger decant pump drawdown, notify dam safety engineer, and perform geotechnical inspection."
+
+insights:
+  - name: "Mine Safety, Ventilation & Slope Stability Live Board"
+    icon: "landscape"
+    color: "#6D4C41"
+    note: "Underground airflow methane concentrations, surface pit slope displacement velocity, and tailings dam stability metrics for Vinacomin & Masan Mining."
+    panels:
+      - name: "Daily Raw Coal Output (MT)"
+        type: metric
+        collection: tkv_mine_kpis
+        options:
+          field: raw_coal_output_mt
+          function: sum
+          decimals: 0
+          suffix: " MT"
+        position_x: 1
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "terrain"
+        color: "#37474F"
+
+      - name: "Methane Gas Drainage Efficiency (%)"
+        type: metric
+        collection: tkv_mine_kpis
+        options:
+          field: ch4_drainage_efficiency_pct
+          function: avg
+          decimals: 1
+          suffix: "%"
+        position_x: 19
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "cyclone"
+        color: "#2E7D32"
+
+      - name: "Peak Underground CH4 Concentration (%) [Limit: 0.75%]"
+        type: metric
+        collection: tkv_underground_ventilation
+        options:
+          field: methane_ch4_percent
+          function: max
+          decimals: 2
+          suffix: "%"
+        position_x: 37
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "air"
+        color: "#C2185B"
+
+      - name: "Open-Pit Max Slope Velocity (mm/day) [Limit: 5.0]"
+        type: metric
+        collection: tkv_slope_stability
+        options:
+          field: displacement_velocity_mm_day
+          function: max
+          decimals: 2
+          suffix: " mm/d"
+        position_x: 55
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "radar"
+        color: "#EF6C00"
+
+      - name: "Live Underground Shaft Atmospheric Sensors"
+        type: list
+        collection: tkv_underground_ventilation
+        options:
+          sortField: timestamp
+          sortDirection: desc
+          displayTemplate: "Sensor {{sensor_tag}} (Shaft {{shaft_code}}): CH4 {{methane_ch4_percent}}% | Air {{air_velocity_m_s}} m/s | CO {{co_ppm}} ppm — {{ventilation_status}}"
+          limit: 6
+        position_x: 1
+        position_y: 13
+        width: 72
+        height: 16
+        icon: "sensors"
+
+      - name: "Controlled Blasting Permits & Clearances"
+        type: list
+        collection: tkv_blasting_permits
+        options:
+          filter:
+            status:
+              _in:
+                - blast_submitted
+                - blast_authorized
+          sortField: date_created
+          sortDirection: desc
+          displayTemplate: "Permit #{{permit_no}}: Bench {{bench_sector}} ({{explosive_charge_kg}} kg) — Status: {{status}}"
+          limit: 6
+        position_x: 1
+        position_y: 29
+        width: 72
+        height: 16
+        icon: "dangerous"

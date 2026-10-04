@@ -1,0 +1,433 @@
+template_id: pharma_gmp_dhg
+version: 1.0.0
+industry_vertical: pharmaceutical_gxp
+archetype: "DHG Pharma EU-GMP Manufacturing Archetype"
+
+metadata:
+  name: "DHG Pharma EU/WHO-GMP Life Sciences Resilience Template"
+  description: "Operational resilience, cleanroom HVAC differential pressure cascade control, electronic batch production record (e-BPR) deviation workflows, and cold-chain quarantine for EU-GMP certified pharmaceutical facilities."
+  status: VERIFIED
+  author: "Industry Template Architect & GMP Specialist"
+  approver: "Zen Phạm"
+  created_at: "2026-10-04"
+  tags:
+    - pharmaceutical
+    - gmp
+    - cleanroom
+    - hvac
+    - differential_pressure
+    - ebpr
+    - cold_chain
+    - sterility
+  regulatory_frameworks:
+    - "EudraLex Volume 4 EU Guidelines for Good Manufacturing Practice"
+    - "WHO Technical Report Series No. 961 Annex 3 HVAC for Pharmaceuticals"
+    - "FDA 21 CFR Part 11 Electronic Records and Electronic Signatures"
+    - "ISO 14644-1 Cleanrooms and Associated Controlled Environments"
+
+taxonomy_and_fields:
+  collections:
+    - collection: dhg_cleanroom_telemetry
+      name: "Cleanroom HVAC Differential Pressure & Particles"
+      description: "Continuous environmental monitoring of differential pressure cascades, airborne particles, temperature, and humidity across classified suites."
+      fields:
+        - field: id
+          type: uuid
+        - field: sensor_tag
+          type: string
+        - field: cleanroom_suite
+          type: string
+        - field: iso_grade
+          type: string
+        - field: differential_pressure_pa
+          type: float
+        - field: temperature_c
+          type: float
+        - field: relative_humidity_pct
+          type: float
+        - field: particle_count_05um
+          type: integer
+        - field: air_balance_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: dhg_batch_production_records
+      name: "Electronic Batch Production Records (e-BPR)"
+      description: "Batch release documentation, critical process parameters (CPP), critical quality attributes (CQA), and Qualified Person (QP) sign-offs."
+      fields:
+        - field: id
+          type: uuid
+        - field: batch_no
+          type: string
+        - field: product_name
+          type: string
+        - field: line_code
+          type: string
+        - field: status
+          type: string
+        - field: critical_deviation_flag
+          type: boolean
+        - field: qp_release_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
+    - collection: dhg_cold_chain_telemetry
+      name: "Cold-Chain & Stability Storage Telemetry"
+      description: "Temperature and door-opening monitoring for 2°C - 8°C walk-in cold rooms and -80°C ultra-low freezers."
+      fields:
+        - field: id
+          type: uuid
+        - field: storage_unit_id
+          type: string
+        - field: chamber_type
+          type: string
+        - field: temperature_c
+          type: float
+        - field: excursion_duration_minutes
+          type: integer
+        - field: quarantine_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: dhg_plant_kpis
+      name: "Pharmaceutical Plant Quality & Yield KPIs"
+      description: "Aggregated plant metrics for right-first-time quality, environmental compliance, and batch cycle times."
+      fields:
+        - field: id
+          type: uuid
+        - field: recorded_date
+          type: date
+        - field: finished_dosage_units
+          type: integer
+        - field: right_first_time_yield_pct
+          type: float
+        - field: environmental_excursions_count
+          type: integer
+        - field: ebpr_cycle_time_hours
+          type: float
+
+  relations:
+    - collection: dhg_batch_production_records
+      field: line_code
+      related_collection: dhg_cleanroom_telemetry
+      type: m2o
+
+  equipment_taxonomy:
+    plant_code: DHG_CANTHO_GMP
+    areas:
+      - code: "ASEPTIC_SUITE"
+        name: "Aseptic Sterile Filling Complex (Grade A/B)"
+        systems:
+          - code: "ISOLATOR_1"
+            name: "Restricted Access Barrier System (RABS) / Isolator"
+          - code: "HVAC_AHU_A1"
+            name: "HEPA 14 Recirculating Air Handling Unit A1"
+          - code: "WFI_LOOP"
+            name: "Water For Injection (WFI) Continuous 85°C Circulation"
+      - code: "ORAL_SOLID_SUITE"
+        name: "Solid Oral Dosage - Granulation & Tableting (Grade C/D)"
+        systems:
+          - code: "FLUID_BED"
+            name: "High Shear Mixer & Fluid Bed Dryer 1"
+          - code: "ROTARY_PRESS"
+            name: "High-Speed Rotary Tablet Press 2"
+      - code: "AUTOMATED_WH"
+        name: "EU-GMP Automated High-Bay Cold Warehouse"
+        systems:
+          - code: "COLD_BAY_1"
+            name: "Walk-in Cold Storage Chamber 1 (2°C - 8°C)"
+          - code: "ULT_FREEZER_A"
+            name: "Ultra-Low Temperature Freezer (-80°C)"
+
+business_flows:
+  - key: dhg-cleanroom-dp-interlock
+    name: "Cleanroom Differential Pressure Cascade Interlock Flow"
+    description: "Evaluates cleanroom differential pressure cascade across Grade A/B/C rooms. If differential pressure drops below 10 Pa, immediately halts aseptic line and escalates containment breach."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - dhg_cleanroom_telemetry
+    nodes:
+      - key: read_dp_telemetry
+        name: "Read Differential Pressure & Particle Telemetry"
+        type: item-read
+        options:
+          collection: dhg_cleanroom_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sensor_tag
+              - cleanroom_suite
+              - iso_grade
+              - differential_pressure_pa
+              - air_balance_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_dp_cascade_limit
+        name: "Verify Pressure Cascade Integrity (>= 10.0 Pa)"
+        type: condition
+        options:
+          filter:
+            read_dp_telemetry:
+              differential_pressure_pa:
+                _lt: 10.0
+        position_x: 25
+        position_y: 1
+
+      - key: trigger_containment_breach
+        name: "Escalate Status to PRESSURE_CASCADE_BREACH"
+        type: item-update
+        options:
+          collection: dhg_cleanroom_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            air_balance_status: PRESSURE_CASCADE_BREACH
+        position_x: 50
+        position_y: 1
+
+      - key: alert_qa_qualified_person
+        name: "Alert Qualified Person & HVAC Lead of Pressure Loss"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qualified_person_id}}"
+          subject: "EU-GMP BREACH: Cleanroom {{read_dp_telemetry.cleanroom_suite}} Differential Pressure Loss"
+          message: "Critical differential pressure drop ({{read_dp_telemetry.differential_pressure_pa}} Pa < 10 Pa) at {{read_dp_telemetry.sensor_tag}}. Aseptic filling halted; initiate environmental deviation report."
+        position_x: 75
+        position_y: 1
+
+      - key: confirm_pressure_cascade_nominal
+        name: "Confirm Nominal Pressure Cascade"
+        type: transform
+        options:
+          format: json
+          expression: "Cleanroom differential pressure is compliant with EU-GMP Annex 1 (> 10 Pa)."
+        position_x: 50
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_dp_telemetry", "resolve"]
+      - ["read_dp_telemetry", "verify_dp_cascade_limit", "resolve"]
+      - ["verify_dp_cascade_limit", "trigger_containment_breach", "resolve"]
+      - ["trigger_containment_breach", "alert_qa_qualified_person", "resolve"]
+      - ["verify_dp_cascade_limit", "confirm_pressure_cascade_nominal", "reject"]
+
+  - key: dhg-batch-release-review
+    name: "Electronic BPR Qualified Person (QP) Batch Release Flow"
+    description: "Evaluates production batch quality records, sterility checks, and critical deviations before releasing pharmaceutical batches for commercial distribution."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - dhg_batch_production_records
+      filter:
+        status:
+          _eq: pending_qp_review
+    nodes:
+      - key: read_ebpr_record
+        name: "Read e-BPR Batch Record"
+        type: item-read
+        options:
+          collection: dhg_batch_production_records
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - batch_no
+              - product_name
+              - line_code
+              - critical_deviation_flag
+        position_x: 1
+        position_y: 1
+
+      - key: verify_batch_sterility_and_cqas
+        name: "Verify Zero Critical Deviations on Batch"
+        type: condition
+        options:
+          filter:
+            read_ebpr_record:
+              critical_deviation_flag:
+                _eq: false
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_commercial_release
+        name: "Authorize Commercial Batch Release"
+        type: item-update
+        options:
+          collection: dhg_batch_production_records
+          key: "{{$trigger.key}}"
+          data:
+            status: batch_released
+            qp_release_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_supply_chain
+        name: "Notify Supply Chain of Released Batch"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.supply_chain_head_id}}"
+          subject: "EU-GMP Batch Released: {{read_ebpr_record.batch_no}} ({{read_ebpr_record.product_name}})"
+          message: "Qualified Person has certified and released batch for commercial distribution."
+        position_x: 75
+        position_y: 1
+
+      - key: quarantine_batch
+        name: "Quarantine Batch Due to Critical Deviation"
+        type: item-update
+        options:
+          collection: dhg_batch_production_records
+          key: "{{$trigger.key}}"
+          data:
+            status: batch_quarantined_investigation
+            qp_release_authorized: false
+            rejection_reason: "Critical OOS/OOT process deviation flagged during manufacturing. Quarantined pending full QA investigation."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_qa_investigation_team
+        name: "Alert QA Deviation Investigation Board"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qa_investigator_id}}"
+          subject: "DEVIATION INVESTIGATION: Batch {{read_ebpr_record.batch_no}} Quarantined"
+          message: "Batch {{read_ebpr_record.batch_no}} withheld from release due to open critical quality deviations."
+        position_x: 75
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_ebpr_record", "resolve"]
+      - ["read_ebpr_record", "verify_batch_sterility_and_cqas", "resolve"]
+      - ["verify_batch_sterility_and_cqas", "authorize_commercial_release", "resolve"]
+      - ["authorize_commercial_release", "notify_supply_chain", "resolve"]
+      - ["verify_batch_sterility_and_cqas", "quarantine_batch", "reject"]
+      - ["quarantine_batch", "alert_qa_investigation_team", "resolve"]
+
+rules:
+  - rule_id: DHG-GMP-DP-001
+    name: "Cleanroom Suite Differential Pressure Cascade Minimum"
+    description: "Positive pressure difference between classified areas must be at least 10-15 Pa per EU-GMP Annex 1 to prevent ingress of non-viable particulates."
+    severity: critical
+    condition: "differential_pressure_pa >= 10.0"
+    enforcement: strict_rejection
+    action: "Automatically interlock airlocks, halt aseptic vial filling, and notify QA compliance officer."
+
+  - rule_id: DHG-COLDCHAIN-TEMP-002
+    name: "Cold-Chain Biologic Storage Temperature Limits"
+    description: "Finished biologics and temperature-sensitive APIs must maintain storage temperature strictly between 2.0°C and 8.0°C."
+    severity: high
+    condition: "temperature_c >= 2.0 && temperature_c <= 8.0"
+    enforcement: escalation
+    action: "Trigger backup refrigeration chiller, quarantine affected inventory lots, and log temperature excursion."
+
+insights:
+  - name: "Cleanroom HVAC, e-BPR Deviation & Cold Chain Live Surveillance Dashboard"
+    icon: "medication"
+    color: "#00897B"
+    note: "Real-time cleanroom differential pressure cascade monitoring, cold-chain temperatures, and electronic BPR batch release tracking for DHG Pharma."
+    panels:
+      - name: "Right-First-Time Yield (%)"
+        type: metric
+        collection: dhg_plant_kpis
+        options:
+          field: right_first_time_yield_pct
+          function: avg
+          decimals: 1
+          suffix: "%"
+        position_x: 1
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "verified"
+        color: "#2E7D32"
+
+      - name: "Finished Dosage Units Produced"
+        type: metric
+        collection: dhg_plant_kpis
+        options:
+          field: finished_dosage_units
+          function: sum
+          decimals: 0
+          suffix: " units"
+        position_x: 19
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "inventory"
+        color: "#1565C0"
+
+      - name: "Aseptic Grade A/B Min Pressure (Pa) [Limit >= 10 Pa]"
+        type: metric
+        collection: dhg_cleanroom_telemetry
+        options:
+          field: differential_pressure_pa
+          function: min
+          decimals: 1
+          suffix: " Pa"
+        position_x: 37
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "air"
+        color: "#00897B"
+
+      - name: "Cold-Chain Max Chamber Temp (°C) [Limit <= 8.0°C]"
+        type: metric
+        collection: dhg_cold_chain_telemetry
+        options:
+          field: temperature_c
+          function: max
+          decimals: 1
+          suffix: " °C"
+        position_x: 55
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "ac_unit"
+        color: "#0288D1"
+
+      - name: "Live Cleanroom HVAC Differential Pressure Telemetry"
+        type: list
+        collection: dhg_cleanroom_telemetry
+        options:
+          sortField: timestamp
+          sortDirection: desc
+          displayTemplate: "Suite {{cleanroom_suite}} ({{iso_grade}}): ΔP {{differential_pressure_pa}} Pa | {{temperature_c}}°C | RH {{relative_humidity_pct}}% — Status: {{air_balance_status}}"
+          limit: 6
+        position_x: 1
+        position_y: 13
+        width: 72
+        height: 16
+        icon: "hvac"
+
+      - name: "Electronic BPR Batches & QP Release Status"
+        type: list
+        collection: dhg_batch_production_records
+        options:
+          filter:
+            status:
+              _in:
+                - pending_qp_review
+                - batch_released
+          sortField: date_created
+          sortDirection: desc
+          displayTemplate: "Batch {{batch_no}}: {{product_name}} (Line {{line_code}}) — Status: {{status}}"
+          limit: 6
+        position_x: 1
+        position_y: 29
+        width: 72
+        height: 16
+        icon: "fact_check"

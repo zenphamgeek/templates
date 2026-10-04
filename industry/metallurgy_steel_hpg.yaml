@@ -1,0 +1,445 @@
+template_id: metallurgy_steel_hpg
+version: 1.0.0
+industry_vertical: mining_metals
+archetype: "Hoa Phat Dung Quat Steel Complex Archetype"
+
+metadata:
+  name: "Hoa Phat Dung Quat Integrated Steel Complex Resilience Template"
+  description: "Operational resilience, blast furnace tapping safety, molten ladle tracking, and toxic carbon monoxide (CO) gas interlocks for integrated blast furnace-basic oxygen furnace (BF-BOF) steelmaking complexes."
+  status: VERIFIED
+  author: "Industry Template Architect & Metallurgy Specialist"
+  approver: "Zen Phạm"
+  created_at: "2026-10-04"
+  tags:
+    - metallurgy
+    - steel
+    - blast_furnace
+    - bof_converter
+    - molten_ladle
+    - co_gas_safety
+    - oee
+  regulatory_frameworks:
+    - "TCVN 6556:1999 Safety in Metallurgy and Hot Metal Casting"
+    - "OSHA 1910.146 Permit-Required Confined Spaces & Hazardous Atmospheres"
+    - "TCVN 5178:2004 Technical Safety Regulations in Smelting and Molten Metal Processing"
+    - "ISO 45001:2018 Occupational Health and Safety Management"
+
+taxonomy_and_fields:
+  collections:
+    - collection: hpg_hot_metal_permits
+      name: "Hot Metal Tapping & Teeming Permits"
+      description: "Permits authorizing hot liquid iron tapping from blast furnaces into torpedo/steel ladles."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_no
+          type: string
+        - field: blast_furnace_id
+          type: string
+        - field: tap_hole_no
+          type: string
+        - field: status
+          type: string
+        - field: gas_co_ppm
+          type: float
+        - field: gas_o2_percent
+          type: float
+        - field: ladle_id
+          type: uuid
+        - field: ladle_shell_temp_c
+          type: float
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
+    - collection: hpg_gas_monitoring
+      name: "Cast House & Converter CO Gas Telemetry"
+      description: "Continuous toxic CO gas and oxygen atmospheric sensors across cast house and BOF converter floors."
+      fields:
+        - field: id
+          type: uuid
+        - field: sensor_tag
+          type: string
+        - field: zone_code
+          type: string
+        - field: co_instantaneous_ppm
+          type: float
+        - field: o2_percentage
+          type: float
+        - field: alarm_level
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: hpg_ladle_tracking
+      name: "Molten Steel Ladle Fleet Tracking"
+      description: "Thermal integrity, refractory lining campaign heats, and weight telemetry of molten metal ladles."
+      fields:
+        - field: id
+          type: uuid
+        - field: ladle_code
+          type: string
+        - field: refractory_heat_count
+          type: integer
+        - field: shell_surface_temp_c
+          type: float
+        - field: tare_weight_mt
+          type: float
+        - field: gross_weight_mt
+          type: float
+        - field: status
+          type: string
+
+    - collection: hpg_plant_kpis
+      name: "HPG Steel Complex Performance KPIs"
+      description: "Aggregated ironmaking and steelmaking operational resilience metrics."
+      fields:
+        - field: id
+          type: uuid
+        - field: recorded_date
+          type: date
+        - field: crude_steel_output_mt
+          type: float
+        - field: bf_fuel_rate_kg_t
+          type: float
+        - field: overall_equipment_effectiveness
+          type: float
+        - field: co_alarms_count
+          type: integer
+
+  relations:
+    - collection: hpg_hot_metal_permits
+      field: ladle_id
+      related_collection: hpg_ladle_tracking
+      type: m2o
+
+  equipment_taxonomy:
+    plant_code: HPG_DUNGQUAT
+    areas:
+      - code: "BF_AREA"
+        name: "Blast Furnace Ironmaking (BF1 - BF4)"
+        systems:
+          - code: "BF1"
+            name: "Blast Furnace 1 (1080 m³)"
+          - code: "BF2"
+            name: "Blast Furnace 2 (1080 m³)"
+          - code: "BF_CH"
+            name: "Cast House Tapping Platforms & Mud Gun"
+      - code: "BOF_AREA"
+        name: "Basic Oxygen Furnace Steelmaking"
+        systems:
+          - code: "BOF1"
+            name: "BOF Converter 1 (120 MT)"
+          - code: "BOF2"
+            name: "BOF Converter 2 (120 MT)"
+          - code: "OG_SYS"
+            name: "OG Primary Gas Cleaning & Recovery"
+      - code: "CCM_AREA"
+        name: "Continuous Casting Machine Fleet"
+        systems:
+          - code: "CCM1"
+            name: "Billet Continuous Caster 1"
+          - code: "CCM2"
+            name: "Slab Continuous Caster 2"
+
+business_flows:
+  - key: hpg-hot-metal-ptw-approval
+    name: "Hot Metal Tapping & Ladle Safety Clearance Flow"
+    description: "Evaluates atmospheric CO levels, oxygen content, and ladle shell surface temperatures before authorizing blast furnace liquid iron tapping."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hpg_hot_metal_permits
+      filter:
+        status:
+          _eq: ptw_submitted
+    nodes:
+      - key: read_ptw_data
+        name: "Read Hot Metal Permit Details"
+        type: item-read
+        options:
+          collection: hpg_hot_metal_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - blast_furnace_id
+              - gas_co_ppm
+              - gas_o2_percent
+              - ladle_id
+              - ladle_shell_temp_c
+        position_x: 1
+        position_y: 1
+
+      - key: verify_atmospheric_and_ladle_safety
+        name: "Verify CO, O2 and Ladle Thermal Envelope"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_ptw_data:
+                  gas_co_ppm:
+                    _lte: 25.0
+              - read_ptw_data:
+                  gas_o2_percent:
+                    _gte: 19.5
+              - read_ptw_data:
+                  gas_o2_percent:
+                    _lte: 23.5
+              - read_ptw_data:
+                  ladle_shell_temp_c:
+                    _lte: 350.0
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_tapping
+        name: "Authorize Hot Metal Tapping"
+        type: item-update
+        options:
+          collection: hpg_hot_metal_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: tapping_authorized
+            work_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_tapping_crew
+        name: "Notify Furnace Shift Supervisor of Clearance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.shift_foreman_id}}"
+          subject: "Hot Metal Tapping Authorized: {{read_ptw_data.permit_no}} on {{read_ptw_data.blast_furnace_id}}"
+          message: "Atmosphere verified (CO <= 25 ppm, O2 safe) and ladle shell <= 350°C. Clearance granted."
+        position_x: 75
+        position_y: 1
+
+      - key: reject_tapping
+        name: "Reject Hot Metal Tapping Due to Hazard Violation"
+        type: item-update
+        options:
+          collection: hpg_hot_metal_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: tapping_rejected_hazard
+            work_authorized: false
+            rejection_reason: "Environmental or thermal safety trip: CO > 25 ppm, O2 outside 19.5-23.5%, or ladle shell temp > 350°C."
+        position_x: 50
+        position_y: 15
+
+      - key: notify_safety_violation
+        name: "Alert Safety Officer of Hot Metal Trip"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.safety_engineer_id}}"
+          subject: "SAFETY TRIP: Hot Metal Tapping Blocked for {{read_ptw_data.permit_no}}"
+          message: "Tapping authorization denied: High CO hazard or ladle shell overheating. Inspect cast house immediately."
+        position_x: 75
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_ptw_data", "resolve"]
+      - ["read_ptw_data", "verify_atmospheric_and_ladle_safety", "resolve"]
+      - ["verify_atmospheric_and_ladle_safety", "authorize_tapping", "resolve"]
+      - ["authorize_tapping", "notify_tapping_crew", "resolve"]
+      - ["verify_atmospheric_and_ladle_safety", "reject_tapping", "reject"]
+      - ["reject_tapping", "notify_safety_violation", "resolve"]
+
+  - key: hpg-bof-co-evacuation-trip
+    name: "Converter & Cast House Toxic CO Alarm Interlock Flow"
+    description: "Monitors real-time CO gas detectors. If instantaneous CO exceeds 50 ppm, immediately escalates to toxic alarm state and broadcasts evacuation alerts."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hpg_gas_monitoring
+    nodes:
+      - key: read_co_sensor_reading
+        name: "Read Instantaneous CO Sensor Reading"
+        type: item-read
+        options:
+          collection: hpg_gas_monitoring
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sensor_tag
+              - zone_code
+              - co_instantaneous_ppm
+              - alarm_level
+        position_x: 1
+        position_y: 1
+
+      - key: check_co_critical_threshold
+        name: "Check if CO Exceeds Critical Safety Threshold (>= 50 ppm)"
+        type: condition
+        options:
+          filter:
+            read_co_sensor_reading:
+              co_instantaneous_ppm:
+                _gte: 50.0
+        position_x: 25
+        position_y: 1
+
+      - key: trigger_evacuation_alarm
+        name: "Escalate Alarm Level to CRITICAL_EVACUATION"
+        type: item-update
+        options:
+          collection: hpg_gas_monitoring
+          key: "{{$trigger.key}}"
+          data:
+            alarm_level: CRITICAL_EVACUATION
+        position_x: 50
+        position_y: 1
+
+      - key: broadcast_evacuation_alert
+        name: "Broadcast Toxic Gas Evacuation Alert"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.emergency_coordinator_id}}"
+          subject: "TOXIC CO ALARM: Evacuate Zone {{read_co_sensor_reading.zone_code}}"
+          message: "Critical CO gas concentration detected ({{read_co_sensor_reading.co_instantaneous_ppm}} ppm) at sensor {{read_co_sensor_reading.sensor_tag}}. Personnel must evacuate to muster point immediately."
+        position_x: 75
+        position_y: 1
+
+      - key: log_normal_gas_state
+        name: "Maintain Normal Atmosphere Status"
+        type: transform
+        options:
+          format: json
+          expression: "CO reading within normal operating envelope."
+        position_x: 50
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_co_sensor_reading", "resolve"]
+      - ["read_co_sensor_reading", "check_co_critical_threshold", "resolve"]
+      - ["check_co_critical_threshold", "trigger_evacuation_alarm", "resolve"]
+      - ["trigger_evacuation_alarm", "broadcast_evacuation_alert", "resolve"]
+      - ["check_co_critical_threshold", "log_normal_gas_state", "reject"]
+
+rules:
+  - rule_id: HPG-BF-CO-001
+    name: "Cast House CO Atmospheric Ceiling Limit"
+    description: "Atmospheric carbon monoxide concentration must remain below 25 ppm for unassisted operations and trigger immediate evacuation if exceeding 50 ppm."
+    severity: critical
+    condition: "gas_co_ppm <= 25.0"
+    enforcement: strict_rejection
+    action: "Halt hot metal tapping, trigger mechanical ventilation, and alert cast house supervisor."
+
+  - rule_id: HPG-LADLE-TEMP-002
+    name: "Molten Steel Ladle Shell Temperature Envelope"
+    description: "Ladle external steel shell surface temperature must not exceed 350°C to prevent refractory burnout and molten metal breakout."
+    severity: high
+    condition: "ladle_shell_temp_c <= 350.0"
+    enforcement: strict_rejection
+    action: "Quarantine ladle, divert liquid steel to emergency pit, and log refractory inspection."
+
+insights:
+  - name: "Blast Furnace, BOF Converter & Gas Safety Dashboard"
+    icon: "precision_manufacturing"
+    color: "#D32F2F"
+    note: "Real-time surveillance of blast furnace iron tapping, converter gas alarms, and molten ladle fleet integrity for Hoa Phat Dung Quat Steel Complex."
+    panels:
+      - name: "Crude Steel Daily Output (MT)"
+        type: metric
+        collection: hpg_plant_kpis
+        options:
+          field: crude_steel_output_mt
+          function: sum
+          decimals: 0
+          suffix: " MT"
+        position_x: 1
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "factory"
+        color: "#1565C0"
+
+      - name: "Overall Equipment Effectiveness (OEE %)"
+        type: metric
+        collection: hpg_plant_kpis
+        options:
+          field: overall_equipment_effectiveness
+          function: avg
+          decimals: 1
+          suffix: "%"
+        position_x: 19
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "speed"
+        color: "#2E7D32"
+
+      - name: "Blast Furnace Fuel Rate (kg/tHM) [Target <= 490]"
+        type: metric
+        collection: hpg_plant_kpis
+        options:
+          field: bf_fuel_rate_kg_t
+          function: avg
+          decimals: 1
+          suffix: " kg/t"
+        position_x: 37
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "local_fire_department"
+        color: "#EF6C00"
+
+      - name: "Cast House Peak CO Level (ppm) [Limit: 25]"
+        type: metric
+        collection: hpg_gas_monitoring
+        options:
+          field: co_instantaneous_ppm
+          function: max
+          decimals: 1
+          suffix: " ppm"
+        position_x: 55
+        position_y: 1
+        width: 18
+        height: 12
+        icon: "air"
+        color: "#C2185B"
+
+      - name: "Real-Time CO Gas Detectors & Critical Alarms"
+        type: list
+        collection: hpg_gas_monitoring
+        options:
+          sortField: timestamp
+          sortDirection: desc
+          displayTemplate: "Sensor {{sensor_tag}} (Zone {{zone_code}}): CO {{co_instantaneous_ppm}} ppm | O2 {{o2_percentage}}% — Status: {{alarm_level}}"
+          limit: 6
+        position_x: 1
+        position_y: 13
+        width: 72
+        height: 16
+        icon: "warning"
+
+      - name: "Active Hot Metal Tapping Permits"
+        type: list
+        collection: hpg_hot_metal_permits
+        options:
+          filter:
+            status:
+              _in:
+                - ptw_submitted
+                - tapping_authorized
+          sortField: date_created
+          sortDirection: desc
+          displayTemplate: "PTW #{{permit_no}}: Furnace {{blast_furnace_id}} TapHole {{tap_hole_no}} — Status: {{status}}"
+          limit: 6
+        position_x: 1
+        position_y: 29
+        width: 72
+        height: 16
+        icon: "assignment"
