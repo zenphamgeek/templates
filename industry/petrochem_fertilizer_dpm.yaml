@@ -692,3 +692,22 @@ insights:
         height: 24
         icon: "donut_large"
         color: "#00ACC1"
+
+      - name: "103-J Syngas Machine Protection & Anti-Surge Telemetry"
+        type: grc-compressor-surge
+        collection: hse_equipment_readings
+        options:
+          compressor_tag: "103-J"
+          service_description: "Ammonia Synthesis Wet Gas Recycle & Syngas Compression"
+          process_gas_name: "Synthesis Gas (3:1 H2:N2 mixture, MW 8.5 g/mol)"
+          design_suction_flow_m3h: 15000.0
+          design_head_kj_kg: 120.0
+          scl_margin_pct: 12.0
+          standard: "API 617 / API 670 / ASME PTC 10"
+        position_x: 1
+        position_y: 69
+        width: 72
+        height: 24
+        icon: "speed"
+        color: "#00E5FF"
+

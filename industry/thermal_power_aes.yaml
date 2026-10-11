@@ -384,3 +384,21 @@ insights:
         width: 72
         height: 16
         icon: "lock"
+
+      - name: "Boiler #1 Drum Level Dynamics & CIWH Water Hammer Monitor"
+        type: grc-steam-boiler
+        collection: aes_cems_telemetry
+        options:
+          boiler_tag: "BLR-01"
+          plant_unit: "AES Mong Duong Boiler 1"
+          design_pressure_bar: 48.0
+          operating_pressure_bar: 40.0
+          max_thermal_ramp_c_hr: 55.0
+          standard: "ASME Section I / B31.1 / NFPA 85"
+        position_x: 1
+        position_y: 45
+        width: 72
+        height: 24
+        icon: "hot_tub"
+        color: "#FF9100"
+

@@ -494,7 +494,9 @@
                     "grc-loto",
                     "grc-coker-drum",
                     "grc-claus-sulfur",
-                    "grc-distillation-column"
+                    "grc-distillation-column",
+                    "grc-compressor-surge",
+                    "grc-steam-boiler"
                   ],
                   "description": "Panel visualizer type"
                 },
