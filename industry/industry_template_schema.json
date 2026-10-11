@@ -489,7 +489,9 @@
                     "grc-risk-heatmap",
                     "grc-cascade-graph",
                     "grc-lopa",
-                    "grc-hazop"
+                    "grc-hazop",
+                    "grc-cause-effect",
+                    "grc-loto"
                   ],
                   "description": "Panel visualizer type"
                 },
