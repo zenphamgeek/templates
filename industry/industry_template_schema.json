@@ -491,7 +491,10 @@
                     "grc-lopa",
                     "grc-hazop",
                     "grc-cause-effect",
-                    "grc-loto"
+                    "grc-loto",
+                    "grc-coker-drum",
+                    "grc-claus-sulfur",
+                    "grc-distillation-column"
                   ],
                   "description": "Panel visualizer type"
                 },
