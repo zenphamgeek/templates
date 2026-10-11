@@ -487,7 +487,9 @@
                     "grc-bowtie",
                     "grc-helm-sunburst",
                     "grc-risk-heatmap",
-                    "grc-cascade-graph"
+                    "grc-cascade-graph",
+                    "grc-lopa",
+                    "grc-hazop"
                   ],
                   "description": "Panel visualizer type"
                 },
