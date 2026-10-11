@@ -711,3 +711,42 @@ insights:
         icon: "speed"
         color: "#00E5FF"
 
+      - name: "101-B Primary Reformer Tube Metal Temperature & Draft Monitor"
+        type: grc-fired-heater
+        collection: hse_equipment_readings
+        options:
+          heater_tag: "101-B"
+          service_name: "Ammonia Synthesis Primary Steam Methane Reformer"
+          max_allowable_tmt_c: 885.0
+          min_arch_draft_mmh2o: -2.5
+          min_pass_flow_kg_s: 12.0
+          design_duty_mw: 42.0
+          tube_metallurgy: "ASTM A335 Grade P9 (9Cr-1Mo)"
+          standard: "API 560 / API 530 / NFPA 85"
+        position_x: 1
+        position_y: 93
+        width: 72
+        height: 24
+        icon: "whatshot"
+        color: "#FF9100"
+
+      - name: "102-E CO2 Removal Amine Treating & Contactor Foaming Monitor"
+        type: grc-amine-treating
+        collection: hse_equipment_readings
+        options:
+          absorber_tag: "COL-T101"
+          regenerator_tag: "COL-T102"
+          amine_type: "MDEA 45 wt% formulated"
+          max_treated_gas_h2s_ppmv: 4.0
+          max_rich_loading_mol_mol: 0.40
+          max_contactor_dp_bar: 0.45
+          trip_contactor_dp_bar: 0.65
+          max_reboiler_temp_c: 135.0
+          standard: "API RP 945 / NACE MR0175 / EPA Subpart Ja"
+        position_x: 1
+        position_y: 117
+        width: 72
+        height: 24
+        icon: "science"
+        color: "#00E676"
+

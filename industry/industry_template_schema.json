@@ -496,7 +496,10 @@
                     "grc-claus-sulfur",
                     "grc-distillation-column",
                     "grc-compressor-surge",
-                    "grc-steam-boiler"
+                    "grc-steam-boiler",
+                    "grc-fired-heater",
+                    "grc-fgru-surge",
+                    "grc-amine-treating"
                   ],
                   "description": "Panel visualizer type"
                 },

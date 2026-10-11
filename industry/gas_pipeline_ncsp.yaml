@@ -381,3 +381,17 @@ insights:
         width: 72
         height: 16
         icon: "health_and_safety"
+
+      - name: "Dinh Co Gas Terminal Flare Gas Recovery & Relief Surge Telemetry"
+        type: grc-fgru-surge
+        collection: ncsp_pipeline_integrity
+        options:
+          equipment_id: "AST-NCSP-FLARE-01"
+          permit_id: "PTW-NCSP-ENV-2026-088"
+          standard: "API 521 / API 537 / EPA 40 CFR 60 Subpart Ja"
+        position_x: 1
+        position_y: 45
+        width: 72
+        height: 24
+        icon: "air"
+        color: "#FFEA00"
