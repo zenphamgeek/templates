@@ -574,3 +574,121 @@ insights:
         width: 72
         height: 16
         icon: "shield"
+
+      - name: "Ammonia Synloop 103-J Loss of Containment Bow-Tie"
+        type: grc-bowtie
+        collection: hse_incidents
+        options:
+          scenario_id: "LOPC-103J-AMMONIA"
+          top_event: "Loss of Primary Containment (103-J Syngas Release)"
+          unit: "103-J Syngas Compressor Train"
+          threats:
+            - "Upstream Syngas Loop Overpressure (> 220 bar)"
+            - "Mechanical Dry Gas Seal Catastrophic Failure"
+            - "Corrosion / Hydrogen Embrittlement in Discharge Line"
+            - "Maintenance Error during Hot Work Valve Lineup"
+          barriers_prevention:
+            - name: "PSV-103 High-Pressure Relief Valve"
+              type: mechanical
+              sil_rating: "SIL-2"
+              status: healthy
+            - name: "SIS High-Pressure Interlock (PT-1034)"
+              type: automated
+              sil_rating: "SIL-3"
+              status: healthy
+            - name: "Vibration Monitoring & Auto-Trip"
+              type: instrumented
+              sil_rating: "SIL-2"
+              status: healthy
+            - name: "e-PTW Gas Clearance & Atmospheric Test"
+              type: administrative
+              status: healthy
+            - name: "Ultrasonic NDT Wall Thickness Inspection"
+              type: inspection
+              status: healthy
+          barriers_mitigation:
+            - name: "Water Curtain Deluge System (Ammonia Scrubber)"
+              type: active_deluge
+              status: healthy
+            - name: "Optical & Acoustic Toxic Gas Detectors"
+              type: detection
+              status: healthy
+            - name: "Emergency Depressurization to Flare Header"
+              type: automated
+              sil_rating: "SIL-3"
+              status: healthy
+            - name: "Unit Blast Wall & Shelter-in-Place"
+              type: passive
+              status: healthy
+            - name: "Phu My Plant Emergency Response Plan"
+              type: procedural
+              status: healthy
+          consequences:
+            - "Toxic ammonia vapor cloud dispersion (Downwind Offsite)"
+            - "Vapor cloud explosion / Flash fire in compressor bay"
+            - "Severe personnel injury / Fatal exposure"
+            - "Unplanned plant shutdown ($1.2M/day lost gross margin)"
+        position_x: 1
+        position_y: 45
+        width: 36
+        height: 24
+        icon: "security"
+        color: "#D32F2F"
+
+      - name: "Phu My GRC & Industrial Safety Helm Sunburst"
+        type: grc-helm-sunburst
+        collection: hse_incidents
+        options:
+          depth: 3
+          frameworks:
+            - name: "OSHA 1910.119 PSM"
+              weight: 35
+              domains:
+                - name: "Process Safety Information (PSI)"
+                  maturity: 4.2
+                  compliance: 96.5
+                - name: "Mechanical Integrity (MI)"
+                  maturity: 3.9
+                  compliance: 92.8
+                - name: "Management of Change (MOC)"
+                  maturity: 4.5
+                  compliance: 98.1
+                - name: "Permits to Work & Hot Work"
+                  maturity: 4.4
+                  compliance: 97.4
+            - name: "IEC 62443 Industrial Security"
+              weight: 25
+              domains:
+                - name: "Zone & Conduit Architecture"
+                  maturity: 3.8
+                  compliance: 89.4
+                - name: "SIS & SCADA Hardening"
+                  maturity: 4.1
+                  compliance: 94.0
+                - name: "OT Asset Inventory & LOTO"
+                  maturity: 4.0
+                  compliance: 91.5
+            - name: "TCVN 5334 Petrochem Safety"
+              weight: 25
+              domains:
+                - name: "Gas Detection & Clearance"
+                  maturity: 4.3
+                  compliance: 96.0
+                - name: "Pressure Vessel Integrity"
+                  maturity: 4.0
+                  compliance: 93.5
+            - name: "ISO 27001 Cyber Resilience"
+              weight: 15
+              domains:
+                - name: "Access Control & SoD"
+                  maturity: 4.6
+                  compliance: 98.8
+                - name: "Incident Logging & Merkle RFC 8785"
+                  maturity: 4.8
+                  compliance: 100.0
+        position_x: 37
+        position_y: 45
+        width: 36
+        height: 24
+        icon: "donut_large"
+        color: "#00ACC1"

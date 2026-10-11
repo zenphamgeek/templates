@@ -483,7 +483,11 @@
                     "pie-chart",
                     "bar-chart",
                     "time-series",
-                    "line-chart"
+                    "line-chart",
+                    "grc-bowtie",
+                    "grc-helm-sunburst",
+                    "grc-risk-heatmap",
+                    "grc-cascade-graph"
                   ],
                   "description": "Panel visualizer type"
                 },
