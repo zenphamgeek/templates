@@ -750,3 +750,63 @@ insights:
         icon: "science"
         color: "#00E676"
 
+      - name: "HCU-101 Heavy Gas Oil Hydrocracking Reactor & EDP Depressuring Monitor"
+        type: grc-hydrocracking
+        collection: hse_equipment_readings
+        options:
+          reactor_tag: "RX-101"
+          separator_tag: "HPS-201"
+          metallurgy: "cr2_25_Mo1_V"
+          max_bed_delta_t_c: 25.0
+          trip_bed_delta_t_c: 28.0
+          min_h2_partial_press_bar: 110.0
+          min_hps_level_pct: 20.0
+          trip_hps_level_pct: 12.0
+          standard: "API RP 934-A / API RP 941 / API 521 §5.20"
+        position_x: 1
+        position_y: 141
+        width: 72
+        height: 24
+        icon: "waves"
+        color: "#00E5FF"
+
+      - name: "FCCU-201 Fluid Catalytic Cracking Regenerator & Catalyst Circulation Monitor"
+        type: grc-fccu
+        collection: hse_equipment_readings
+        options:
+          regenerator_tag: "REGEN-201"
+          riser_tag: "RISER-201"
+          min_slide_valve_dp_bar: 0.15
+          trip_slide_valve_dp_bar: 0.05
+          max_afterburn_delta_t_c: 25.0
+          trip_afterburn_delta_t_c: 35.0
+          min_air_blower_flow_kg_s: 45.0
+          standard: "API RP 556 / API 521 / OSHA 1910.119 PSM"
+        position_x: 1
+        position_y: 165
+        width: 72
+        height: 24
+        icon: "cyclone"
+        color: "#FF6D00"
+
+      - name: "CCR-301 Continuous Catalytic Reforming Platformer & Catalyst Regen Monitor"
+        type: grc-ccr
+        collection: hse_equipment_readings
+        options:
+          stack_tag: "RX-STACK-301"
+          regen_tag: "REGEN-301"
+          max_regen_burn_temp_c: 520.0
+          trip_regen_burn_temp_c: 540.0
+          max_pinning_dp_bar: 0.45
+          min_lift_velocity_m_s: 6.0
+          max_lift_velocity_m_s: 14.0
+          target_ron: 102.4
+          standard: "UOP/Axens CCR Platforming / API RP 556 / NFPA 86"
+        position_x: 1
+        position_y: 189
+        width: 72
+        height: 24
+        icon: "stacked_bar_chart"
+        color: "#7C4DFF"
+
+

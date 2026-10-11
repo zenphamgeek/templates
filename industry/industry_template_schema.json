@@ -499,7 +499,10 @@
                     "grc-steam-boiler",
                     "grc-fired-heater",
                     "grc-fgru-surge",
-                    "grc-amine-treating"
+                    "grc-amine-treating",
+                    "grc-hydrocracking",
+                    "grc-fccu",
+                    "grc-ccr"
                   ],
                   "description": "Panel visualizer type"
                 },
