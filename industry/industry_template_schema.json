@@ -502,7 +502,10 @@
                     "grc-amine-treating",
                     "grc-hydrocracking",
                     "grc-fccu",
-                    "grc-ccr"
+                    "grc-ccr",
+                    "grc-psv",
+                    "grc-tank-overfill",
+                    "grc-marine-jetty"
                   ],
                   "description": "Panel visualizer type"
                 },

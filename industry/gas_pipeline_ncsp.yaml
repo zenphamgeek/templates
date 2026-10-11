@@ -395,3 +395,43 @@ insights:
         height: 24
         icon: "air"
         color: "#FFEA00"
+
+      - name: "Thi Vai Marine Gas & Condensate Loading Arm Kinematics & ISGOTT HUD"
+        type: grc-marine-jetty
+        collection: ncsp_pipeline_integrity
+        options:
+          berth_id: "BERTH-02-NORTH"
+          vessel_name: "MT PETROVIETNAM STAR"
+          vessel_imo: "IMO-9481234"
+          cargo_grade: "Light Condensate"
+          max_nominal_reach_m: 11.0
+          max_warning_reach_m: 13.5
+          standard: "OCIMF ISGOTT 6th / USCG 33 CFR 154 / SIGTTO"
+        position_x: 1
+        position_y: 69
+        width: 72
+        height: 24
+        icon: "anchor"
+        color: "#00E5FF"
+
+      - name: "TK-601 Thi Vai Condensate Storage Tank Overfill & Radar ATG Monitor"
+        type: grc-tank-overfill
+        collection: ncsp_pipeline_integrity
+        options:
+          tank_tag: "TK-601"
+          service_name: "Thi Vai Marine Terminal Condensate Storage Tank"
+          roof_type: "floatingRoof"
+          diameter_m: 42.0
+          height_m: 21.0
+          normal_operating_level_m: 17.5
+          high_level_alarm_m: 18.9
+          high_high_level_alarm_m: 19.9
+          critical_high_level_m: 20.6
+          standard: "API 2350 5th Ed. / API 650 / IEC 61511 (SIL-2)"
+        position_x: 1
+        position_y: 93
+        width: 72
+        height: 24
+        icon: "propane_tank"
+        color: "#00E676"
+

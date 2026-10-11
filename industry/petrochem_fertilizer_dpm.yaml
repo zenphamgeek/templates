@@ -809,4 +809,46 @@ insights:
         icon: "stacked_bar_chart"
         color: "#7C4DFF"
 
+      - name: "TK-401 Bulk Liquid Ammonia Storage Tank Overfill & Radar ATG Monitor"
+        type: grc-tank-overfill
+        collection: hse_equipment_readings
+        options:
+          tank_tag: "TK-401"
+          service_name: "Refrigerated Liquid Ammonia Storage Tank (-33°C)"
+          roof_type: "domeRoof"
+          diameter_m: 36.0
+          height_m: 22.0
+          normal_operating_level_m: 18.0
+          high_level_alarm_m: 19.8
+          high_high_level_alarm_m: 20.9
+          critical_high_level_m: 21.5
+          standard: "API 2350 5th Ed. / API 620 / IEC 61511 (SIL-2)"
+        position_x: 1
+        position_y: 213
+        width: 72
+        height: 24
+        icon: "propane_tank"
+        color: "#00E5FF"
+
+      - name: "PSV-101A Ammonia Synthesis Loop Primary Safety Relief Valve Monitor"
+        type: grc-psv
+        collection: hse_equipment_readings
+        options:
+          valve_tag: "PSV-101A"
+          protected_equipment: "Ammonia Converter 105-D Synthesis Loop"
+          valve_type: "balancedBellows"
+          contingency: "blockedDischarge"
+          set_pressure_bar: 165.0
+          operating_pressure_bar: 142.0
+          selected_orifice: "P"
+          has_upstream_rupture_disc: true
+          standard: "API 520 / API 526 / ASME Section VIII Div 1"
+        position_x: 1
+        position_y: 237
+        width: 72
+        height: 24
+        icon: "lock_reset"
+        color: "#00E676"
+
+
 
