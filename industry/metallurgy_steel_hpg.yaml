@@ -443,3 +443,17 @@ insights:
         width: 72
         height: 16
         icon: "assignment"
+
+      - name: "CR-250 Ladle Crane LMI & Molten Steel Critical Lift Monitor"
+        type: grc-crane-lmi
+        collection: hpg_hot_metal_permits
+        options:
+          crane_tag: "CR-250-LADLE"
+          crane_model: "Liebherr LTM 1250-5.1"
+          standard: "ASME B30.5 / EN 13000 / CIRIA C703"
+        position_x: 1
+        position_y: 45
+        width: 72
+        height: 24
+        icon: "precision_manufacturing"
+        color: "#FF9100"

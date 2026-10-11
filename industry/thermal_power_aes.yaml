@@ -402,3 +402,18 @@ insights:
         icon: "hot_tub"
         color: "#FF9100"
 
+      - name: "500kV / 22kV Switchgear Bus A Arc Flash & Incident Energy Monitor"
+        type: grc-arc-flash
+        collection: aes_loto_isolations
+        options:
+          equipment_tag: "SWGR-500-01"
+          voltage_volts: 4160.0
+          bolted_fault_ka: 25.0
+          standard: "IEEE 1584-2018 / NFPA 70E"
+        position_x: 1
+        position_y: 69
+        width: 72
+        height: 24
+        icon: "bolt"
+        color: "#00E5FF"
+

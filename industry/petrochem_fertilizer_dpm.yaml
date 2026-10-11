@@ -850,5 +850,24 @@ insights:
         icon: "lock_reset"
         color: "#00E676"
 
+      - name: "FLG-103-J Syngas Compressor High-Pressure Bolted Flange Joint Monitor"
+        type: grc-flange-joint
+        collection: hse_equipment_readings
+        options:
+          joint_tag: "FLG-103-J-SYN"
+          flange_rating: "class1500"
+          bolt_count: 16
+          bolt_grade: "astmA193B7"
+          gasket_type: "spiralWound316L"
+          target_torque_nm: 1450.0
+          standard: "ASME PCC-1 / ASME B16.5 / B16.47"
+        position_x: 1
+        position_y: 261
+        width: 72
+        height: 24
+        icon: "handyman"
+        color: "#00E5FF"
+
+
 
 

@@ -505,7 +505,10 @@
                     "grc-ccr",
                     "grc-psv",
                     "grc-tank-overfill",
-                    "grc-marine-jetty"
+                    "grc-marine-jetty",
+                    "grc-arc-flash",
+                    "grc-crane-lmi",
+                    "grc-flange-joint"
                   ],
                   "description": "Panel visualizer type"
                 },
