@@ -27,9 +27,289 @@ metadata:
 
 taxonomy_and_fields:
   collections:
+    - collection: legal_documents
+      name: "Sổ đăng ký Văn bản Pháp luật (Legal Documents Register)"
+      description: "Quản lý danh mục văn bản quy phạm pháp luật, quy chuẩn, tiêu chuẩn kỹ thuật an toàn ngành hóa chất - dầu khí."
+      fields:
+        - field: id
+          type: uuid
+        - field: doc_number
+          type: string
+        - field: title
+          type: string
+        - field: document_type
+          type: string
+        - field: issuing_authority
+          type: string
+        - field: sign_date
+          type: date
+        - field: effective_date
+          type: date
+        - field: expiration_date
+          type: date
+        - field: status
+          type: string
+        - field: field_of_law
+          type: string
+        - field: summary
+          type: text
+        - field: attachment
+          type: uuid
+
+    - collection: legal_clauses
+      name: "Điều khoản Văn bản Pháp luật (Legal Clauses)"
+      description: "Chi tiết các điều, khoản, điểm quy định nghĩa vụ tuân thủ cụ thể áp dụng đối với nhà máy."
+      fields:
+        - field: id
+          type: uuid
+        - field: document_id
+          type: uuid
+        - field: clause_number
+          type: string
+        - field: title
+          type: string
+        - field: content
+          type: text
+        - field: applicability_status
+          type: string
+
+    - collection: legal_clause_impacts
+      name: "Phân tích Đánh giá Ảnh hưởng Điều khoản (Clause Impact Assessments)"
+      description: "Phân tích tác động chi tiết của từng điều khoản đến các xưởng công nghệ (Amoniac, Ure, Phụ trợ) và phòng ban liên quan."
+      fields:
+        - field: id
+          type: uuid
+        - field: clause_id
+          type: uuid
+        - field: plant_unit
+          type: string
+        - field: impact_level
+          type: string
+        - field: impact_analysis
+          type: text
+        - field: required_changes
+          type: text
+        - field: assessed_by
+          type: uuid
+        - field: assessed_at
+          type: timestamp
+        - field: review_status
+          type: string
+
+    - collection: legal_compliance_evaluations
+      name: "Đánh giá Tuân thủ Pháp luật Định kỳ (Compliance Evaluations)"
+      description: "Đánh giá mức độ tuân thủ thực tế, thu thập bằng chứng kiểm tra và kích hoạt hành động khắc phục CAPA khi phát hiện vi phạm."
+      fields:
+        - field: id
+          type: uuid
+        - field: clause_impact_id
+          type: uuid
+        - field: evaluation_date
+          type: date
+        - field: compliance_status
+          type: string
+        - field: audit_evidence
+          type: text
+        - field: findings_gap
+          type: text
+        - field: action_plan_required
+          type: boolean
+        - field: evaluator
+          type: uuid
+
+    - collection: grc_actions
+      name: "Hành động Khắc phục & Phòng ngừa (CAPA Register)"
+      description: "Sổ theo dõi hành động khắc phục đa nguồn (Sự cố, Đánh giá Pháp lý, Thanh kiểm tra, Mối nguy, Vi phạm PTW) và quy trình kiểm chứng độc lập."
+      fields:
+        - field: id
+          type: uuid
+        - field: identifier
+          type: string
+        - field: title
+          type: string
+        - field: description
+          type: text
+        - field: source_type
+          type: string
+        - field: source_reference_id
+          type: string
+        - field: source_title
+          type: string
+        - field: plant_unit
+          type: string
+        - field: priority
+          type: string
+        - field: status
+          type: string
+        - field: root_cause_analysis
+          type: text
+        - field: corrective_measure
+          type: text
+        - field: preventive_measure
+          type: text
+        - field: owner
+          type: uuid
+        - field: assignee
+          type: uuid
+        - field: verifier
+          type: uuid
+        - field: verification_evidence
+          type: text
+        - field: verification_status
+          type: string
+        - field: due_date
+          type: date
+        - field: completed_at
+          type: timestamp
+        - field: closed_at
+          type: timestamp
+
+    - collection: hse_tasks
+      name: "Công việc An toàn Độc lập (HSE Standalone Tasks)"
+      description: "Quản lý công việc phân công độc lập không bắt buộc gắn với dự án, hỗ trợ quy trình giao việc, đính kèm bằng chứng và hoàn thành."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: task_type
+          type: string
+        - field: plant_unit
+          type: string
+        - field: status
+          type: string
+        - field: priority
+          type: string
+        - field: description
+          type: text
+        - field: assignee
+          type: uuid
+        - field: supervisor
+          type: uuid
+        - field: due_date
+          type: date
+        - field: completed_at
+          type: timestamp
+
+    - collection: hse_jsas
+      name: "Phân tích An toàn Công việc (Job Safety Analysis - JSA)"
+      description: "Khởi tạo JSA độc lập không bắt buộc gắn với Work Request, tích hợp phân tách bước công việc, ma trận rủi ro 5x5 và cấp duyệt an toàn."
+      fields:
+        - field: id
+          type: uuid
+        - field: jsa_number
+          type: string
+        - field: title
+          type: string
+        - field: permit_request
+          type: uuid
+        - field: work_order_ref
+          type: string
+        - field: plant_unit
+          type: string
+        - field: work_location
+          type: string
+        - field: work_description
+          type: text
+        - field: status
+          type: string
+        - field: lead_assessor
+          type: uuid
+        - field: safety_reviewer
+          type: uuid
+        - field: overall_residual_risk_level
+          type: string
+        - field: expires_at
+          type: timestamp
+
+    - collection: hse_jsa_steps
+      name: "Chi tiết Bước Công việc & Rủi ro (JSA Job Steps & 5x5 Risk Matrix)"
+      description: "Phân rã từng bước thao tác, nhận diện mối nguy, tính điểm rủi ro ban đầu (L x S), biện pháp kiểm soát và rủi ro còn lại (ALARP <= 6)."
+      fields:
+        - field: id
+          type: uuid
+        - field: jsa_id
+          type: uuid
+        - field: step_number
+          type: integer
+        - field: step_description
+          type: string
+        - field: hazard_identification
+          type: text
+        - field: initial_likelihood
+          type: integer
+        - field: initial_severity
+          type: integer
+        - field: initial_risk_score
+          type: integer
+        - field: control_measures
+          type: text
+        - field: residual_likelihood
+          type: integer
+        - field: residual_severity
+          type: integer
+        - field: residual_risk_score
+          type: integer
+        - field: residual_risk_level
+          type: string
+        - field: alarp_demonstrated
+          type: boolean
+
+    - collection: hse_jsa_ppe
+      name: "Trang bị Bảo hộ Lao động Bắt buộc (Mandatory PPE Checklist)"
+      description: "Danh mục phương tiện bảo vệ cá nhân chuyên dụng (bình dưỡng khí SCBA, phin lọc khí NH3 K2, quần áo chống hóa chất)."
+      fields:
+        - field: id
+          type: uuid
+        - field: jsa_id
+          type: uuid
+        - field: ppe_type
+          type: string
+        - field: required
+          type: boolean
+        - field: specification
+          type: string
+
+    - collection: hse_permit_requests
+      name: "Phiếu Đăng ký Làm việc (Work Permit Requests - WPR)"
+      description: "Đăng ký kế hoạch công việc kèm quy trình kiểm tra hiện trường và ký duyệt đa tầng (Người yêu cầu -> Trưởng ca/Khu vực -> Cán bộ HSE -> Cấp phép)."
+      fields:
+        - field: id
+          type: uuid
+        - field: request_no
+          type: string
+        - field: title
+          type: string
+        - field: permit_type
+          type: string
+        - field: plant_unit
+          type: string
+        - field: work_area
+          type: string
+        - field: requester
+          type: uuid
+        - field: status
+          type: string
+        - field: applicant_signature
+          type: string
+        - field: area_custodian
+          type: uuid
+        - field: area_custodian_status
+          type: string
+        - field: area_inspection_notes
+          type: text
+        - field: safety_officer
+          type: uuid
+        - field: safety_officer_status
+          type: string
+        - field: issuing_authority
+          type: uuid
+        - field: issuing_decision
+          type: string
+
     - collection: hse_permits
-      name: "Permits to Work (PTW)"
-      description: "Electronic PTW register for high-hazard work execution."
+      name: "Giấy phép Làm việc Điện tử (e-PTW Register)"
+      description: "Quản lý 8 loại hình giấy phép làm việc đặc thù nhà máy hóa chất (Lửa loại 1/2, Không gian hạn chế, LOTO, Làm việc trên cao, Đào đất, Phóng xạ, Nâng hạ)."
       fields:
         - field: id
           type: uuid
@@ -43,6 +323,16 @@ taxonomy_and_fields:
           type: string
         - field: plant_unit
           type: string
+        - field: specific_equipment_tag
+          type: string
+        - field: gas_test_required
+          type: boolean
+        - field: loto_required
+          type: boolean
+        - field: jsa_id
+          type: uuid
+        - field: permit_request
+          type: uuid
         - field: gas_clearance
           type: string
         - field: work_authorized
@@ -50,9 +340,26 @@ taxonomy_and_fields:
         - field: rejection_reason
           type: text
 
+    - collection: hse_permit_attachments
+      name: "Hồ sơ Đính kèm Giấy phép (PTW Required Dossiers)"
+      description: "Quản lý danh mục hồ sơ tài liệu bắt buộc kèm theo giấy phép (Bản vẽ LOTO, Chứng chỉ thợ hàn, Biện pháp thi công, Kế hoạch ứng cứu)."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_id
+          type: uuid
+        - field: attachment_type
+          type: string
+        - field: file_ref
+          type: string
+        - field: verified_by
+          type: uuid
+        - field: verification_status
+          type: string
+
     - collection: hse_gas_tests
-      name: "Atmospheric Gas Tests"
-      description: "Gas testing logs before and during hot work / confined space entry."
+      name: "Nhật ký Đo Khí Môi trường (Multi-Gas Atmospheric Tests)"
+      description: "Kiểm tra nồng độ khí cháy CH4, Oxy O2, độc tính Amoniac NH3, H2S và CO với ngưỡng khóa liên động tự động trước khi cấp phép."
       fields:
         - field: id
           type: uuid
@@ -61,6 +368,8 @@ taxonomy_and_fields:
         - field: gas_ch4_lel_percent
           type: float
         - field: gas_o2_percent
+          type: float
+        - field: gas_nh3_ppm
           type: float
         - field: gas_h2s_ppm
           type: float
@@ -74,7 +383,7 @@ taxonomy_and_fields:
           type: string
 
     - collection: hse_moc_changes
-      name: "Management of Change (MOC)"
+      name: "Quản lý Thay đổi (Management of Change - MOC)"
       description: "Technical, organizational, and operational change management."
       fields:
         - field: id
@@ -148,6 +457,38 @@ taxonomy_and_fields:
           type: integer
 
   relations:
+    - collection: legal_clauses
+      field: document_id
+      related_collection: legal_documents
+      type: m2o
+    - collection: legal_clause_impacts
+      field: clause_id
+      related_collection: legal_clauses
+      type: m2o
+    - collection: legal_compliance_evaluations
+      field: clause_impact_id
+      related_collection: legal_clause_impacts
+      type: m2o
+    - collection: hse_jsa_steps
+      field: jsa_id
+      related_collection: hse_jsas
+      type: m2o
+    - collection: hse_jsa_ppe
+      field: jsa_id
+      related_collection: hse_jsas
+      type: m2o
+    - collection: hse_permits
+      field: permit_request
+      related_collection: hse_permit_requests
+      type: m2o
+    - collection: hse_permits
+      field: jsa_id
+      related_collection: hse_jsas
+      type: m2o
+    - collection: hse_permit_attachments
+      field: permit_id
+      related_collection: hse_permits
+      type: m2o
     - collection: hse_gas_tests
       field: permit_id
       related_collection: hse_permits
@@ -452,6 +793,253 @@ business_flows:
       - ["finalize_moc_approval", "notify_moc_authorized", "resolve"]
       - ["reject_moc", "notify_moc_rejection", "resolve"]
 
+  - key: dpm-legal-compliance-to-capa
+    name: "Tự động Khởi tạo CAPA khi Đánh giá Không Tuân thủ Pháp lý"
+    description: "Khi đánh giá tuân thủ điều khoản pháp lý phát hiện không tuân thủ hoặc tuân thủ một phần và yêu cầu biện pháp khắc phục, tự động khởi tạo hành động khắc phục CAPA và thông báo tới Trưởng đơn vị phụ trách."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - legal_compliance_evaluations
+      filter:
+        action_plan_required:
+          _eq: true
+    nodes:
+      - key: read_compliance_eval
+        name: "Đọc Kết quả Đánh giá Tuân thủ"
+        type: item-read
+        options:
+          collection: legal_compliance_evaluations
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - clause_impact_id
+              - compliance_status
+              - findings_gap
+              - action_plan_required
+              - evaluator
+        position_x: 1
+        position_y: 1
+
+      - key: check_non_compliance_gate
+        name: "Kiểm tra Mức độ Không Tuân thủ"
+        type: condition
+        options:
+          filter:
+            read_compliance_eval:
+              compliance_status:
+                _in:
+                  - non_compliant
+                  - partial_compliant
+        position_x: 20
+        position_y: 1
+
+      - key: create_capa_from_compliance
+        name: "Khởi tạo Hành động Khắc phục CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "CAPA Tuân thủ Pháp lý: Khắc phục điểm không phù hợp"
+            description: "{{read_compliance_eval.findings_gap}}"
+            source_type: "LEGAL_COMPLIANCE"
+            source_reference_id: "{{read_compliance_eval.id}}"
+            priority: "HIGH"
+            status: "open"
+            verification_status: "PENDING"
+        position_x: 40
+        position_y: 1
+
+      - key: notify_unit_capa_lead
+        name: "Thông báo Khởi tạo CAPA Pháp lý"
+        type: notification
+        options:
+          recipient: "{{read_compliance_eval.evaluator}}"
+          subject: "Hệ thống tự động khởi tạo CAPA Tuân thủ Pháp lý (Mã đánh giá #{{read_compliance_eval.id}})"
+          message: "Phát hiện điểm không phù hợp pháp lý: {{read_compliance_eval.findings_gap}}. Đã tự động tạo hành động khắc phục CAPA."
+        position_x: 60
+        position_y: 1
+
+      - key: log_compliant_evaluation
+        name: "Ghi nhận Đánh giá Hợp lệ"
+        type: transform
+        options:
+          note: "Kết quả đánh giá đạt chuẩn hoặc không yêu cầu lập hành động khắc phục."
+        position_x: 40
+        position_y: 14
+
+    edges:
+      - ["$trigger", "read_compliance_eval", "resolve"]
+      - ["read_compliance_eval", "check_non_compliance_gate", "resolve"]
+      - ["check_non_compliance_gate", "create_capa_from_compliance", "resolve"]
+      - ["create_capa_from_compliance", "notify_unit_capa_lead", "resolve"]
+      - ["check_non_compliance_gate", "log_compliant_evaluation", "reject"]
+
+  - key: dpm-jsa-approval-flow
+    name: "Quy trình Thẩm duyệt Phân tích An toàn Công việc (JSA ALARP Gate)"
+    description: "Kiểm tra mức độ rủi ro còn lại của tất cả các bước công việc theo nguyên tắc ALARP (R <= 6) trước khi phê duyệt JSA; tự động từ chối và yêu cầu bổ sung biện pháp kỹ thuật nếu rủi ro còn lại ở mức cao."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_jsas
+      filter:
+        status:
+          _eq: submitted
+    nodes:
+      - key: read_jsa_record
+        name: "Đọc Hồ sơ JSA Trình duyệt"
+        type: item-read
+        options:
+          collection: hse_jsas
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - jsa_number
+              - title
+              - lead_assessor
+              - safety_reviewer
+              - overall_residual_risk_level
+        position_x: 1
+        position_y: 1
+
+      - key: verify_alarp_residual_level
+        name: "Kiểm tra Mức Rủi ro Dư ALARP"
+        type: condition
+        options:
+          filter:
+            read_jsa_record:
+              overall_residual_risk_level:
+                _eq: LOW
+        position_x: 20
+        position_y: 1
+
+      - key: approve_jsa_status
+        name: "Phê duyệt JSA Đạt chuẩn ALARP"
+        type: item-update
+        options:
+          collection: hse_jsas
+          key: "{{$trigger.key}}"
+          data:
+            status: approved
+        position_x: 40
+        position_y: 1
+
+      - key: notify_jsa_author_approved
+        name: "Thông báo JSA Đã Được Phê duyệt"
+        type: notification
+        options:
+          recipient: "{{read_jsa_record.lead_assessor}}"
+          subject: "JSA #{{read_jsa_record.jsa_number}} đã được phê duyệt an toàn"
+          message: "Phân tích an toàn công việc JSA #{{read_jsa_record.jsa_number}} đã chứng minh rủi ro dư ở mức thấp (ALARP <= 6) và được phê duyệt."
+        position_x: 60
+        position_y: 1
+
+      - key: reject_jsa_high_residual
+        name: "Từ chối JSA do Rủi ro Dư Vượt ngưỡng ALARP"
+        type: item-update
+        options:
+          collection: hse_jsas
+          key: "{{$trigger.key}}"
+          data:
+            status: rejected
+        position_x: 40
+        position_y: 14
+
+      - key: notify_jsa_author_rejected
+        name: "Thông báo Yêu cầu Bổ sung Kiểm soát JSA"
+        type: notification
+        options:
+          recipient: "{{read_jsa_record.lead_assessor}}"
+          subject: "JSA #{{read_jsa_record.jsa_number}} bị từ chối: Rủi ro vượt ngưỡng an toàn"
+          message: "JSA chưa chứng minh giảm thiểu rủi ro xuống mức thấp nhất chấp nhận được (ALARP). Vui lòng bổ sung biện pháp kiểm soát kỹ thuật hoặc thiết bị bảo hộ đặc chủng."
+        position_x: 60
+        position_y: 14
+
+    edges:
+      - ["$trigger", "read_jsa_record", "resolve"]
+      - ["read_jsa_record", "verify_alarp_residual_level", "resolve"]
+      - ["verify_alarp_residual_level", "approve_jsa_status", "resolve"]
+      - ["approve_jsa_status", "notify_jsa_author_approved", "resolve"]
+      - ["verify_alarp_residual_level", "reject_jsa_high_residual", "reject"]
+      - ["reject_jsa_high_residual", "notify_jsa_author_rejected", "resolve"]
+
+  - key: dpm-capa-lifecycle-verification
+    name: "Quy trình Nghiệm thu Độc lập Hành động Khắc phục (CAPA SoD Verification)"
+    description: "Khi hành động khắc phục hoàn thành, kích hoạt quy trình nghiệm thu kiểm chứng độc lập (Verifier != Assignee) và thông báo người kiểm chứng thực địa."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - grc_actions
+      filter:
+        status:
+          _eq: completed
+    nodes:
+      - key: read_completed_capa
+        name: "Đọc Dữ liệu CAPA Đã Thực hiện"
+        type: item-read
+        options:
+          collection: grc_actions
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - identifier
+              - title
+              - assignee
+              - verifier
+              - verification_status
+        position_x: 1
+        position_y: 1
+
+      - key: check_capa_verification_gate
+        name: "Kiểm tra Trạng thái Nghiệm thu"
+        type: condition
+        options:
+          filter:
+            read_completed_capa:
+              verification_status:
+                _eq: PENDING
+        position_x: 20
+        position_y: 1
+
+      - key: notify_capa_independent_verifier
+        name: "Gửi Yêu cầu Nghiệm thu cho Verifier"
+        type: notification
+        options:
+          recipient: "{{read_completed_capa.verifier}}"
+          subject: "CAPA #{{read_completed_capa.identifier}} hoàn thành - Chờ nghiệm thu kiểm chứng thực địa"
+          message: "Hành động khắc phục CAPA #{{read_completed_capa.identifier}} đã được thực hiện. Đề nghị người nghiệm thu độc lập kiểm chứng hiệu quả hiện trường."
+        position_x: 40
+        position_y: 1
+
+      - key: log_capa_already_verified
+        name: "Ghi nhận CAPA Đã Nghiệm thu Hoàn tất"
+        type: transform
+        options:
+          note: "Hành động khắc phục đã được nghiệm thu hiệu quả hoặc không ở trạng thái chờ kiểm chứng."
+        position_x: 40
+        position_y: 14
+
+    edges:
+      - ["$trigger", "read_completed_capa", "resolve"]
+      - ["read_completed_capa", "check_capa_verification_gate", "resolve"]
+      - ["check_capa_verification_gate", "notify_capa_independent_verifier", "resolve"]
+      - ["check_capa_verification_gate", "log_capa_already_verified", "reject"]
+
 rules:
   - rule_id: DPM-PSM-001
     name: "Hot Work Strict Flammable Gas Limit"
@@ -468,6 +1056,22 @@ rules:
     condition: "process_safety_approver != operations_approver && operations_approver != plant_manager_approver"
     enforcement: approval_gate
     action: "Enforce multi-discipline sequential signoff gate."
+
+  - rule_id: DPM-JSA-003
+    name: "JSA Residual Risk ALARP Threshold"
+    description: "All job steps in JSA must demonstrate ALARP residual risk score <= 6 prior to approval."
+    severity: high
+    condition: "residual_risk_score <= 6"
+    enforcement: approval_gate
+    action: "Reject JSA and require additional hierarchy of controls."
+
+  - rule_id: DPM-CAPA-004
+    name: "CAPA Segregation of Duties Invariant"
+    description: "Assignee cannot act as the Verifier for their own corrective action (Maker != Checker)."
+    severity: high
+    condition: "assignee != verifier"
+    enforcement: strict_rejection
+    action: "Reject self-verification of CAPA actions."
 
 insights:
   - name: "Ammonia Synthesis Unit (103-J Syngas Compressor) Live KPI Dashboard"
