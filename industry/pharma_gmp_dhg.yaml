@@ -213,6 +213,50 @@ taxonomy_and_fields:
         - field: timestamp
           type: timestamp
 
+    - collection: grc_actions
+      name: "Pharmaceutical Quality System (PQS) CAPA & Regulatory Actions"
+      description: "Corrective and Preventive Actions (CAPA), QP batch disposition holds, and ICH Q10 management review directives."
+      fields:
+        - field: id
+          type: uuid
+        - field: status
+          type: string
+        - field: title
+          type: string
+        - field: priority
+          type: string
+        - field: source_module
+          type: string
+        - field: action_category
+          type: string
+        - field: description
+          type: string
+        - field: assigned_to
+          type: string
+
+    - collection: hse_tasks
+      name: "Cleanroom & Cold-Chain Operational Tasks"
+      description: "Field intervention, Grade A environmental recovery, and Mean Kinetic Temperature (MKT) stability evaluation tasks."
+      fields:
+        - field: id
+          type: uuid
+        - field: status
+          type: string
+        - field: title
+          type: string
+        - field: priority
+          type: string
+        - field: task_title
+          type: string
+        - field: unit_tag
+          type: string
+        - field: description
+          type: string
+        - field: assigned_to
+          type: string
+        - field: deadline_hours
+          type: integer
+
   relations:
     - collection: dhg_batch_production_records
       field: line_code
@@ -831,6 +875,395 @@ business_flows:
       - ["verify_alcoa_data_integrity", "flag_data_integrity_violation", "reject"]
       - ["flag_data_integrity_violation", "broadcast_data_integrity_alarm", "resolve"]
 
+  - key: dhg-annex1-grade-a-particle-excursion-gate
+    name: "EU-GMP Annex 1 Grade A Non-Viable Particle & Humidity Excursion Interlock Gate"
+    description: "Monitors ISO 5 / Grade A aseptic filling suite airborne 0.5µm particle counts (<= 3,520 particles/m³) and relative humidity (<= 55.0%). On excursion, halts filling line and dispatches cleanroom decontamination task."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - dhg_cleanroom_telemetry
+    nodes:
+      - key: read_particle_telemetry
+        name: "Read Cleanroom Airborne Particle & Humidity Telemetry"
+        type: item-read
+        options:
+          collection: dhg_cleanroom_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sensor_tag
+              - cleanroom_suite
+              - iso_grade
+              - particle_count_05um
+              - relative_humidity_pct
+              - air_balance_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_annex1_grade_a_envelope
+        name: "Verify 0.5µm Particle Count <= 3520 and Relative Humidity <= 55.0%"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_particle_telemetry:
+                  particle_count_05um:
+                    _lte: 3520
+              - read_particle_telemetry:
+                  relative_humidity_pct:
+                    _lte: 55.0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_grade_a_particle_compliance
+        name: "Confirm ISO 5 Grade A Particle & Humidity Compliance"
+        type: transform
+        options:
+          format: json
+          expression: "Grade A cleanroom 0.5um particle count and relative humidity comply with EU-GMP Annex 1 limits."
+        position_x: 50
+        position_y: 1
+
+      - key: trigger_particle_excursion_line_stop
+        name: "Update Air Balance Status to PARTICLE_EXCURSION_LINE_STOP"
+        type: item-update
+        options:
+          collection: dhg_cleanroom_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            air_balance_status: PARTICLE_EXCURSION_LINE_STOP
+        position_x: 50
+        position_y: 15
+
+      - key: create_cleanroom_recovery_hse_task
+        name: "Create Aseptic Line Stop & HEPA Recovery Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "EU-GMP Annex 1 Grade A Particle Excursion Line Stop & VHP Decontamination ({{read_particle_telemetry.cleanroom_suite}})"
+            task_title: "Execute HEPA Filter Integrity Scan & VHP Sanitization on {{read_particle_telemetry.cleanroom_suite}}"
+            unit_tag: "{{read_particle_telemetry.cleanroom_suite}}"
+            priority: critical
+            status: assigned
+            description: "Airborne 0.5um particle count ({{read_particle_telemetry.particle_count_05um}}/m3) or RH ({{read_particle_telemetry.relative_humidity_pct}}%) exceeded EU-GMP Annex 1 limits at sensor {{read_particle_telemetry.sensor_tag}}."
+            assigned_to: "Cleanroom_Microbiology_HSE_Team"
+            deadline_hours: 4
+        position_x: 75
+        position_y: 15
+
+      - key: notify_aseptic_production_lead
+        name: "Alert Aseptic Production Lead of Particle Excursion"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qualified_person_id}}"
+          subject: "ANNEX 1 EXCURSION: Line Stop in {{read_particle_telemetry.cleanroom_suite}}"
+          message: "0.5um particle count ({{read_particle_telemetry.particle_count_05um}}) or RH ({{read_particle_telemetry.relative_humidity_pct}}%) breached Grade A threshold. Filling halted and HSE recovery task created."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_particle_telemetry", "resolve"]
+      - ["read_particle_telemetry", "verify_annex1_grade_a_envelope", "resolve"]
+      - ["verify_annex1_grade_a_envelope", "confirm_grade_a_particle_compliance", "resolve"]
+      - ["verify_annex1_grade_a_envelope", "trigger_particle_excursion_line_stop", "reject"]
+      - ["trigger_particle_excursion_line_stop", "create_cleanroom_recovery_hse_task", "resolve"]
+      - ["create_cleanroom_recovery_hse_task", "notify_aseptic_production_lead", "resolve"]
+
+  - key: dhg-ebpr-qp-batch-disposition-gate
+    name: "EU-GMP Annex 16 Qualified Person (QP) Final Batch Disposition Gate"
+    description: "Enforces final EU-GMP Annex 16 batch certification gate verifying zero critical deviations and explicit QP release authorization; places non-compliant batches on QP quarantine hold and raises a PQS CAPA."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - dhg_batch_production_records
+      filter:
+        status:
+          _eq: awaiting_qp_disposition
+    nodes:
+      - key: read_batch_disposition_dossier
+        name: "Read e-BPR Batch Disposition Dossier"
+        type: item-read
+        options:
+          collection: dhg_batch_production_records
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - batch_no
+              - product_name
+              - line_code
+              - status
+              - critical_deviation_flag
+              - qp_release_authorized
+        position_x: 1
+        position_y: 1
+
+      - key: verify_qp_disposition_criteria
+        name: "Verify Zero Critical Deviations and Explicit QP Authorization"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_batch_disposition_dossier:
+                  critical_deviation_flag:
+                    _eq: false
+              - read_batch_disposition_dossier:
+                  qp_release_authorized:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: certify_qp_batch_disposition
+        name: "Certify Batch in EU-GMP Annex 16 Register"
+        type: item-update
+        options:
+          collection: dhg_batch_production_records
+          key: "{{$trigger.key}}"
+          data:
+            status: qp_disposition_certified
+        position_x: 50
+        position_y: 1
+
+      - key: hold_batch_qp_quarantine
+        name: "Update Batch Status to batch_quarantined_qp_hold"
+        type: item-update
+        options:
+          collection: dhg_batch_production_records
+          key: "{{$trigger.key}}"
+          data:
+            status: batch_quarantined_qp_hold
+            rejection_reason: "EU-GMP Annex 16 QP Disposition rejected: unresolved critical deviation or missing Qualified Person certification."
+        position_x: 50
+        position_y: 15
+
+      - key: create_qp_hold_capa_action
+        name: "Create Mandatory Batch Quarantine CAPA in grc_actions"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "EU-GMP Annex 16 QP Batch Quarantine CAPA: Batch {{read_batch_disposition_dossier.batch_no}}"
+            source_module: ebpr_qp_disposition
+            action_category: batch_quarantine_capa
+            priority: critical
+            status: open
+            description: "Batch {{read_batch_disposition_dossier.batch_no}} ({{read_batch_disposition_dossier.product_name}}) placed on batch_quarantined_qp_hold pending deviation closure and QP review."
+            assigned_to: "QA_Qualified_Person_Board"
+        position_x: 75
+        position_y: 15
+
+      - key: notify_qp_disposition_hold
+        name: "Notify Qualified Person & Warehouse of Quarantine Hold"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qualified_person_id}}"
+          subject: "QP HOLD: Batch {{read_batch_disposition_dossier.batch_no}} Quarantined"
+          message: "Batch {{read_batch_disposition_dossier.batch_no}} locked under batch_quarantined_qp_hold and CAPA generated."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_batch_disposition_dossier", "resolve"]
+      - ["read_batch_disposition_dossier", "verify_qp_disposition_criteria", "resolve"]
+      - ["verify_qp_disposition_criteria", "certify_qp_batch_disposition", "resolve"]
+      - ["verify_qp_disposition_criteria", "hold_batch_qp_quarantine", "reject"]
+      - ["hold_batch_qp_quarantine", "create_qp_hold_capa_action", "resolve"]
+      - ["create_qp_hold_capa_action", "notify_qp_disposition_hold", "resolve"]
+
+  - key: dhg-cold-chain-mkt-excursion-stability-gate
+    name: "Cold-Chain Mean Kinetic Temperature (MKT) Excursion & ICH Q1A Stability Gate"
+    description: "Monitors cold-chain storage telemetry verifying excursion duration <= 15 minutes and chamber temperature <= 8.0°C. On excursion, locks inventory under MKT_STABILITY_HOLD and dispatches stability evaluation task."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - dhg_cold_chain_telemetry
+    nodes:
+      - key: read_cold_chain_telemetry
+        name: "Read Cold-Chain Chamber Temperature & Excursion Telemetry"
+        type: item-read
+        options:
+          collection: dhg_cold_chain_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - storage_unit_id
+              - chamber_type
+              - temperature_c
+              - excursion_duration_minutes
+              - quarantine_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_cold_chain_thermal_limits
+        name: "Verify Excursion Duration <= 15 min and Temperature <= 8.0°C"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_cold_chain_telemetry:
+                  excursion_duration_minutes:
+                    _lte: 15
+              - read_cold_chain_telemetry:
+                  temperature_c:
+                    _lte: 8.0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_cold_chain_nominal
+        name: "Confirm Cold-Chain Thermal Envelope Compliant"
+        type: transform
+        options:
+          format: json
+          expression: "Cold-chain storage chamber within 2C-8C thermal envelope and <= 15 min excursion tolerance."
+        position_x: 50
+        position_y: 1
+
+      - key: place_mkt_stability_hold
+        name: "Update Quarantine Status to MKT_STABILITY_HOLD"
+        type: item-update
+        options:
+          collection: dhg_cold_chain_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            quarantine_status: MKT_STABILITY_HOLD
+        position_x: 50
+        position_y: 15
+
+      - key: create_mkt_stability_assessment_task
+        name: "Create ICH Q1A MKT Stability Assessment Task in hse_tasks"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "Cold-Chain MKT Stability Assessment for Chamber {{read_cold_chain_telemetry.storage_unit_id}}"
+            task_title: "Calculate Mean Kinetic Temperature (MKT) & Inspect Quarantine Lots in {{read_cold_chain_telemetry.storage_unit_id}}"
+            unit_tag: "{{read_cold_chain_telemetry.storage_unit_id}}"
+            priority: high
+            status: assigned
+            description: "Thermal excursion detected ({{read_cold_chain_telemetry.temperature_c}}C for {{read_cold_chain_telemetry.excursion_duration_minutes}} min). Inventory placed on MKT_STABILITY_HOLD."
+            assigned_to: "Cold_Chain_QA_Stability_Team"
+            deadline_hours: 8
+        position_x: 75
+        position_y: 15
+
+      - key: notify_cold_chain_custodian
+        name: "Alert Cold-Chain Warehouse & QA Stability Officer"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qa_stability_officer_id}}"
+          subject: "COLD-CHAIN HOLD: MKT Excursion on {{read_cold_chain_telemetry.storage_unit_id}}"
+          message: "Chamber {{read_cold_chain_telemetry.storage_unit_id}} reached {{read_cold_chain_telemetry.temperature_c}}C for {{read_cold_chain_telemetry.excursion_duration_minutes}} minutes. Status set to MKT_STABILITY_HOLD."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_cold_chain_telemetry", "resolve"]
+      - ["read_cold_chain_telemetry", "verify_cold_chain_thermal_limits", "resolve"]
+      - ["verify_cold_chain_thermal_limits", "confirm_cold_chain_nominal", "resolve"]
+      - ["verify_cold_chain_thermal_limits", "place_mkt_stability_hold", "reject"]
+      - ["place_mkt_stability_hold", "create_mkt_stability_assessment_task", "resolve"]
+      - ["create_mkt_stability_assessment_task", "notify_cold_chain_custodian", "resolve"]
+
+  - key: dhg-rft-yield-environmental-trend-flow
+    name: "ICH Q10 Pharmaceutical Quality System (PQS) RFT Yield & Environmental Trend Flow"
+    description: "Evaluates daily plant KPIs verifying Right-First-Time (RFT) yield >= 98.5% and zero environmental excursions; triggers an ICH Q10 PQS management review CAPA action when thresholds are breached."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - dhg_plant_kpis
+    nodes:
+      - key: read_plant_kpi_snapshot
+        name: "Read Plant RFT Yield & Environmental Excursion KPIs"
+        type: item-read
+        options:
+          collection: dhg_plant_kpis
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - recorded_date
+              - finished_dosage_units
+              - right_first_time_yield_pct
+              - environmental_excursions_count
+              - ebpr_cycle_time_hours
+        position_x: 1
+        position_y: 1
+
+      - key: verify_rft_and_zero_excursions
+        name: "Verify RFT Yield >= 98.5% and Environmental Excursions == 0"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_plant_kpi_snapshot:
+                  right_first_time_yield_pct:
+                    _gte: 98.5
+              - read_plant_kpi_snapshot:
+                  environmental_excursions_count:
+                    _eq: 0
+        position_x: 25
+        position_y: 1
+
+      - key: log_ich_q10_pqs_nominal
+        name: "Record Compliant ICH Q10 PQS Performance"
+        type: transform
+        options:
+          format: json
+          expression: "Plant RFT yield and environmental excursion metrics meet ICH Q10 Pharmaceutical Quality System targets."
+        position_x: 50
+        position_y: 1
+
+      - key: create_ich_q10_management_review_action
+        name: "Create ICH Q10 PQS Management Review Action in grc_actions"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "ICH Q10 PQS Management Review & Yield Drift CAPA ({{read_plant_kpi_snapshot.recorded_date}})"
+            source_module: ich_q10_pqs_kpi
+            action_category: management_review_capa
+            priority: high
+            status: open
+            description: "RFT Yield ({{read_plant_kpi_snapshot.right_first_time_yield_pct}}%) or environmental excursions ({{read_plant_kpi_snapshot.environmental_excursions_count}}) breached ICH Q10 target thresholds."
+            assigned_to: "Site_Quality_Director"
+        position_x: 50
+        position_y: 15
+
+      - key: notify_site_quality_director
+        name: "Notify Site Quality Director of PQS Trend Excursion"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.quality_director_id}}"
+          subject: "ICH Q10 PQS REVIEW: RFT Yield / Environmental Trend Alert ({{read_plant_kpi_snapshot.recorded_date}})"
+          message: "Plant RFT yield={{read_plant_kpi_snapshot.right_first_time_yield_pct}}%, environmental excursions={{read_plant_kpi_snapshot.environmental_excursions_count}}. Management review CAPA created."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_plant_kpi_snapshot", "resolve"]
+      - ["read_plant_kpi_snapshot", "verify_rft_and_zero_excursions", "resolve"]
+      - ["verify_rft_and_zero_excursions", "log_ich_q10_pqs_nominal", "resolve"]
+      - ["verify_rft_and_zero_excursions", "create_ich_q10_management_review_action", "reject"]
+      - ["create_ich_q10_management_review_action", "notify_site_quality_director", "resolve"]
+
 rules:
   - rule_id: DHG-GMP-DP-001
     name: "Cleanroom Suite Differential Pressure Cascade Minimum"
@@ -848,11 +1281,43 @@ rules:
     enforcement: escalation
     action: "Trigger backup refrigeration chiller, quarantine affected inventory lots, and log temperature excursion."
 
+  - rule_id: DHG-PARTICLE-003
+    name: "EU-GMP Annex 1 Grade A Non-Viable Particle & Humidity Envelope"
+    description: "Grade A / ISO 5 aseptic filling zone must maintain 0.5µm airborne particulates <= 3,520 particles/m³ and relative humidity <= 55.0%."
+    severity: critical
+    condition: "particle_count_05um <= 3520 && relative_humidity_pct <= 55.0"
+    enforcement: strict_rejection
+    action: "Trigger PARTICLE_EXCURSION_LINE_STOP, halt aseptic filling, and dispatch cleanroom HEPA/VHP recovery task."
+
+  - rule_id: DHG-OOS-004
+    name: "Out-of-Specification (OOS) Raw Chromatography Audit Lock & Retest Gate"
+    description: "Phase I OOS laboratory investigations must lock raw chromatography data prior to any retest hypothesis and escalate to Phase II manufacturing investigation unless documented instrument error is confirmed."
+    severity: critical
+    condition: "raw_chromatography_locked == true && lab_retest_valid == true"
+    enforcement: strict_rejection
+    action: "Block unauthorized retesting into compliance, place batch on QA hold, and escalate to Phase II cross-functional investigation."
+
+  - rule_id: DHG-ALCOA-005
+    name: "21 CFR Part 11 & EU-GMP Annex 11 ALCOA+ Data Integrity Invariant"
+    description: "Computerized manufacturing and QC systems must maintain NTP time synchronization within 1.0 second, verified MFA electronic signatures, zero audit trail gaps, and zero record deletion attempts."
+    severity: critical
+    condition: "ntp_time_delta_sec <= 1.0 && signature_mfa_verified == true && audit_trail_gaps_count == 0 && unauthorized_deletion_attempts == 0"
+    enforcement: strict_rejection
+    action: "Flag DATA_INTEGRITY_VIOLATION_FLAGGED, lock computerized batch release interface, and alert CSV & QA compliance leads."
+
+  - rule_id: DHG-CC-006
+    name: "EU-GMP Annex 15 Change Control IQ/OQ/PQ & DAV Regulatory Variation Gate"
+    description: "Major/critical GMP change controls cannot be implemented without approved quality risk assessment, completed IQ/OQ/PQ validation protocols, DAV regulatory variation clearance, and QA Head sign-off."
+    severity: high
+    condition: "risk_assessment_approved == true && validation_protocol_complete == true && dav_variation_approved_or_exempt == true && qa_head_approved == true"
+    enforcement: approval_gate
+    action: "Hold change control under change_control_held_regulatory_gap and notify Regulatory Affairs & Validation Head."
+
 insights:
   - name: "Cleanroom HVAC, e-BPR Deviation & Cold Chain Live Surveillance Dashboard"
     icon: "medication"
     color: "#00897B"
-    note: "Real-time cleanroom differential pressure cascade monitoring, cold-chain temperatures, and electronic BPR batch release tracking for DHG Pharma."
+    note: "[L3 • DHG] Real-time cleanroom differential pressure cascade monitoring, cold-chain temperatures, and electronic BPR batch release tracking for DHG Pharma."
     panels:
       - name: "Right-First-Time Yield (%)"
         type: metric
@@ -924,7 +1389,7 @@ insights:
           limit: 6
         position_x: 1
         position_y: 13
-        width: 72
+        width: 36
         height: 16
         icon: "hvac"
 
@@ -941,8 +1406,60 @@ insights:
           sortDirection: desc
           displayTemplate: "Batch {{batch_no}}: {{product_name}} (Line {{line_code}}) — Status: {{status}}"
           limit: 6
-        position_x: 1
-        position_y: 29
-        width: 72
+        position_x: 37
+        position_y: 13
+        width: 36
         height: 16
         icon: "fact_check"
+
+      - name: "EU-GMP Annex 1 Grade A/B Cleanroom Sterility Assurance Bow-Tie"
+        type: grc-bowtie
+        collection: dhg_cleanroom_telemetry
+        options:
+          scenario_id: "BOWTIE-DHG-ANNEX1-STERILITY"
+          top_event: "Grade A Cleanroom Differential Pressure Loss (<10 Pa) & Particulate Ingress"
+        position_x: 1
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "security"
+        color: "#00897B"
+
+      - name: "EU-GMP / 21 CFR Part 11 ALCOA+ & ICH Q10 Compliance Sunburst"
+        type: grc-helm-sunburst
+        collection: dhg_audit_trail_events
+        options:
+          depth: 3
+        position_x: 37
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "donut_large"
+        color: "#1565C0"
+
+      - name: "Water For Injection (WFI) 85°C Loop & Pure Steam Generator HUD"
+        type: grc-steam-boiler
+        collection: dhg_cleanroom_telemetry
+        options:
+          boiler_tag: "PSG-WFI-01"
+          plant_unit: "DHG Can Tho Aseptic WFI & Pure Steam Sanitizing Loop"
+        position_x: 1
+        position_y: 51
+        width: 36
+        height: 22
+        icon: "hot_tub"
+        color: "#0288D1"
+
+      - name: "Quality Risk Management (ICH Q9) Deviation & OOS HAZOP Matrix"
+        type: grc-hazop
+        collection: dhg_gmp_deviations
+        options:
+          study_id: "HAZOP-DHG-ASEPTIC-01"
+          node: "RABS Isolator Filling & Cold-Chain 2-8°C Quarantine"
+        position_x: 37
+        position_y: 51
+        width: 36
+        height: 22
+        icon: "table_chart"
+        color: "#6A1B9A"
+

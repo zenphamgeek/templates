@@ -271,8 +271,8 @@ taxonomy_and_fields:
           type: string
 
     - collection: hse_permit_requests
-      name: "Phiếu Đăng ký Làm việc (Work Permit Requests - WPR)"
-      description: "Đăng ký kế hoạch công việc kèm quy trình kiểm tra hiện trường và ký duyệt đa tầng (Người yêu cầu -> Trưởng ca/Khu vực -> Cán bộ HSE -> Cấp phép)."
+      name: "Phiếu Yêu cầu Giấy phép Làm việc (Work Permit Requests - WPR)"
+      description: "Phiếu yêu cầu cấp Giấy phép làm việc (WPR) liên kết phân tích an toàn công việc (JSA) đã duyệt và trình Giám sát An toàn (SFM) phê duyệt để khởi tạo Giấy phép Làm việc (GPLV)."
       fields:
         - field: id
           type: uuid
@@ -308,8 +308,8 @@ taxonomy_and_fields:
           type: string
 
     - collection: hse_permits
-      name: "Giấy phép Làm việc Điện tử (e-PTW Register)"
-      description: "Quản lý 8 loại hình giấy phép làm việc đặc thù nhà máy hóa chất (Lửa loại 1/2, Không gian hạn chế, LOTO, Làm việc trên cao, Đào đất, Phóng xạ, Nâng hạ)."
+      name: "Giấy phép Làm việc (GPLV - Chung / Nóng / KGHH)"
+      description: "Quản lý Giấy phép Làm việc (GPLV: Chung, Nóng, Không gian hạn chế KGHH) tại Nhà máy Đạm Phú Mỹ kèm kiểm tra Điều kiện An toàn (ĐKAT), Cô lập Điện, Cô lập Công nghệ - Cơ khí (CN-CK), Xác nhận Công trình Ngầm (CTN) và Chứng chỉ Phóng xạ (CCPX)."
       fields:
         - field: id
           type: uuid
@@ -341,8 +341,8 @@ taxonomy_and_fields:
           type: text
 
     - collection: hse_permit_attachments
-      name: "Hồ sơ Đính kèm Giấy phép (PTW Required Dossiers)"
-      description: "Quản lý danh mục hồ sơ tài liệu bắt buộc kèm theo giấy phép (Bản vẽ LOTO, Chứng chỉ thợ hàn, Biện pháp thi công, Kế hoạch ứng cứu)."
+      name: "Hồ sơ Đính kèm Giấy phép GPLV (Cô lập Điện/CN-CK, CTN, CCPX)"
+      description: "Quản lý danh mục hồ sơ đính kèm bắt buộc theo GPLV (Phiếu yêu cầu cô lập điện, Cô lập CN-CK, Xác nhận công trình ngầm CTN, Chứng chỉ phóng xạ CCPX, Kế hoạch ứng cứu KGHH)."
       fields:
         - field: id
           type: uuid
@@ -358,8 +358,8 @@ taxonomy_and_fields:
           type: string
 
     - collection: hse_gas_tests
-      name: "Nhật ký Đo Khí Môi trường (Multi-Gas Atmospheric Tests)"
-      description: "Kiểm tra nồng độ khí cháy CH4, Oxy O2, độc tính Amoniac NH3, H2S và CO với ngưỡng khóa liên động tự động trước khi cấp phép."
+      name: "Bản ghi Kiểm tra Khí Hiện trường theo GPLV (Atmospheric Gas Logs)"
+      description: "Ghi nhận kết quả đo kiểm tra khí tại hiện trường phục vụ xác nhận Điều kiện An toàn (ĐKAT) cho Giấy phép Làm việc (GPLV Nóng / KGHH)."
       fields:
         - field: id
           type: uuid
@@ -969,9 +969,9 @@ business_flows:
       - ["check_sod_maker_checker", "reject_capa_sod_violation", "reject"]
       - ["reject_capa_sod_violation", "notify_sod_violation_alert", "resolve"]
 
-  - key: dpm-ptw-wpr-4level-chain
-    name: "Chuỗi Thẩm duyệt Phiếu Đăng ký Công tác 4 Cấp (e-PTW WPR 4-Level Chain)"
-    description: "Điều phối chuỗi phê duyệt 4 cấp đối với Phiếu Đăng ký Làm việc (WPR): Người đề nghị (Requester) -> Trưởng khu vực (Area Custodian) -> Cán bộ An toàn (Safety Officer) -> Người cấp phép (Issuing Authority / SFM), tự động chuyển đổi thành Giấy phép e-PTW chính thức."
+  - key: dpm-gplv-wpr-sfm-issuance
+    name: "Phê duyệt Phiếu Yêu cầu WPR (SFM) & Khởi tạo Giấy phép Làm việc GPLV (Chung / Nóng / KGHH)"
+    description: "Quy trình chuẩn Đạm Phú Mỹ (DPM): Người yêu cầu lập Phiếu yêu cầu giấy phép (WPR) đính kèm JSA đã duyệt -> Trưởng khu vực xác nhận hiện trường -> Giám sát An toàn (SFM - Safety Field Manager) phê duyệt WPR và tự động khởi tạo Giấy phép Làm việc (GPLV: Chung, Nóng hoặc Không gian hạn chế KGHH)."
     status: active
     accountability: activity
     trigger:
@@ -988,7 +988,7 @@ business_flows:
             - safety_approved
     nodes:
       - key: read_wpr_state
-        name: "Đọc Trạng thái Thẩm duyệt WPR"
+        name: "Đọc Hồ sơ Phiếu Yêu cầu WPR & Trạng thái JSA"
         type: item-read
         options:
           collection: hse_permit_requests
@@ -1010,7 +1010,7 @@ business_flows:
         position_y: 1
 
       - key: check_area_custodian_gate
-        name: "Cấp 2: Kiểm tra Phê duyệt Trưởng Khu vực"
+        name: "Kiểm tra Xác nhận Hiện trường của Trưởng Khu vực"
         type: condition
         options:
           filter:
@@ -1021,7 +1021,7 @@ business_flows:
         position_y: 1
 
       - key: check_safety_officer_gate
-        name: "Cấp 3: Kiểm tra Phê duyệt Cán bộ An toàn"
+        name: "Kiểm tra Thẩm định JSA & Biện pháp An toàn"
         type: condition
         options:
           filter:
@@ -1031,8 +1031,8 @@ business_flows:
         position_x: 30
         position_y: 1
 
-      - key: check_issuing_authority_gate
-        name: "Cấp 4: Kiểm tra Quyết định Người Cấp phép SFM"
+      - key: check_sfm_issuing_gate
+        name: "Kiểm tra Quyết định Phê duyệt WPR của Giám sát An toàn (SFM)"
         type: condition
         options:
           filter:
@@ -1042,61 +1042,61 @@ business_flows:
         position_x: 45
         position_y: 1
 
-      - key: create_official_permit
-        name: "Tự động Khởi tạo Giấy phép e-PTW Chính thức"
+      - key: create_official_gplv
+        name: "Tự động Khởi tạo Giấy phép Làm việc GPLV (Chung / Nóng / KGHH)"
         type: item-create
         options:
           collection: hse_permits
           data:
-            permit_no: "PTW-{{read_wpr_state.request_no}}"
+            permit_no: "GPLV-{{read_wpr_state.request_no}}"
             permit_type: "{{read_wpr_state.permit_type}}"
             title: "{{read_wpr_state.title}}"
-            status: "issued"
+            status: "created"
             plant_unit: "{{read_wpr_state.plant_unit}}"
             permit_request: "{{read_wpr_state.id}}"
-            work_authorized: true
+            work_authorized: false
         position_x: 60
         position_y: 1
 
       - key: update_wpr_approved
-        name: "Cập nhật WPR Đã Cấp Giấy phép"
+        name: "Cập nhật WPR Đã Phê duyệt & Sinh GPLV"
         type: item-update
         options:
           collection: hse_permit_requests
           key: "{{$trigger.key}}"
           data:
-            status: "approved_and_permit_generated"
+            status: "approved_and_gplv_generated"
         position_x: 60
         position_y: 10
 
       - key: notify_wpr_success
-        name: "Thông báo Cấp Giấy phép e-PTW Thành công"
+        name: "Thông báo Khởi tạo Giấy phép Làm việc GPLV Thành công"
         type: notification
         options:
           recipient: "{{read_wpr_state.requester}}"
-          subject: "Phiếu Đăng ký WPR #{{read_wpr_state.request_no}} Đã Được Cấp Giấy Phép"
-          message: "Cả 4 cấp đã hoàn tất thẩm duyệt. Giấy phép điện tử e-PTW đã được cấp phát thành công."
+          subject: "Phiếu Yêu cầu WPR #{{read_wpr_state.request_no}} Đã Được SFM Phê Duyệt & Sinh GPLV"
+          message: "Giám sát An toàn (SFM) đã phê duyệt WPR. Hệ thống đã tự động khởi tạo Giấy phép Làm việc (GPLV) để thực hiện bước kiểm tra ĐKAT và cô lập hiện trường."
         position_x: 60
         position_y: 20
 
       - key: reject_wpr_gate
-        name: "Từ chối WPR do Chưa Đạt Tiêu chuẩn An toàn"
+        name: "Từ chối WPR do Chưa Đạt Yêu cầu JSA / An toàn"
         type: item-update
         options:
           collection: hse_permit_requests
           key: "{{$trigger.key}}"
           data:
-            status: "rejected_at_approval_gate"
+            status: "rejected_by_sfm"
         position_x: 30
         position_y: 15
 
       - key: notify_wpr_rejection
-        name: "Thông báo Từ chối Phiếu Đăng ký WPR"
+        name: "Thông báo Từ chối Phiếu Yêu cầu WPR"
         type: notification
         options:
           recipient: "{{read_wpr_state.requester}}"
-          subject: "Từ chối Phiếu Đăng ký WPR #{{read_wpr_state.request_no}}"
-          message: "Phiếu công tác không đạt phê duyệt tại cổng kiểm tra hiện trường/an toàn. Vui lòng khắc phục các yêu cầu kỹ thuật."
+          subject: "Từ chối Phiếu Yêu cầu WPR #{{read_wpr_state.request_no}}"
+          message: "Phiếu yêu cầu WPR chưa đạt yêu cầu thẩm định JSA hoặc điều kiện hiện trường của SFM. Vui lòng bổ sung hồ sơ."
         position_x: 45
         position_y: 15
     edges:
@@ -1104,17 +1104,17 @@ business_flows:
       - ["read_wpr_state", "check_area_custodian_gate", "resolve"]
       - ["check_area_custodian_gate", "check_safety_officer_gate", "resolve"]
       - ["check_area_custodian_gate", "reject_wpr_gate", "reject"]
-      - ["check_safety_officer_gate", "check_issuing_authority_gate", "resolve"]
+      - ["check_safety_officer_gate", "check_sfm_issuing_gate", "resolve"]
       - ["check_safety_officer_gate", "reject_wpr_gate", "reject"]
-      - ["check_issuing_authority_gate", "create_official_permit", "resolve"]
-      - ["check_issuing_authority_gate", "reject_wpr_gate", "reject"]
-      - ["create_official_permit", "update_wpr_approved", "resolve"]
+      - ["check_sfm_issuing_gate", "create_official_gplv", "resolve"]
+      - ["check_sfm_issuing_gate", "reject_wpr_gate", "reject"]
+      - ["create_official_gplv", "update_wpr_approved", "resolve"]
       - ["update_wpr_approved", "notify_wpr_success", "resolve"]
       - ["reject_wpr_gate", "notify_wpr_rejection", "resolve"]
 
-  - key: dpm-ptw-confined-space-5gas-gate
-    name: "Cổng Kiểm định Đo Khí 5 Chỉ tiêu & Giám sát KGHH (Confined Space 5-Gas Clearance Gate)"
-    description: "Kiểm tra toàn diện 5 chỉ tiêu môi trường không khí trong không gian hạn chế (KGHH): CH4 < 5% LEL, O2 từ 19.5% đến 23.5%, H2S < 10 ppm, NH3 < 25 ppm, CO < 25 ppm, đồng thời xác nhận có người cảnh giới (Watchman) đủ chứng chỉ trước khi cho phép vào làm việc."
+  - key: dpm-gplv-isolation-ctn-ccpx-gate
+    name: "Cổng Kiểm tra Điều kiện An toàn (ĐKAT), Cô lập Điện/CN-CK, Công trình Ngầm (CTN) & Chứng chỉ Phóng xạ (CCPX) cho GPLV"
+    description: "Kiểm soát toàn diện các điều kiện bắt buộc trước khi Người Nhận Việc (WPH) và Giám sát An toàn (SFM) ký giao nhận việc (working) trên Giấy phép Làm việc (GPLV): xác nhận Điều kiện An toàn (ĐKAT), hoàn tất Phiếu cô lập Điện và Cô lập Công nghệ - Cơ khí (CN-CK), Xác nhận Công trình Ngầm (CTN) và Chứng chỉ Phóng xạ (CCPX)."
     status: active
     accountability: activity
     trigger:
@@ -1124,65 +1124,11 @@ business_flows:
       collections:
         - hse_permits
       filter:
-        permit_type:
-          _eq: confined_space
         status:
-          _eq: gas_test_submitted
+          _eq: safety_check_submitted
     nodes:
-      - key: read_confined_space_gas_test
-        name: "Đọc Kết quả Đo Khí KGHH Mới Nhất"
-        type: item-read
-        options:
-          collection: hse_gas_tests
-          query:
-            filter:
-              permit_id:
-                _eq: "{{$trigger.key}}"
-            sort:
-              - "-test_timestamp"
-            limit: 1
-            fields:
-              - id
-              - permit_id
-              - gas_ch4_lel_percent
-              - gas_o2_percent
-              - gas_nh3_ppm
-              - gas_h2s_ppm
-              - gas_co_ppm
-              - tester_id
-              - atmospheric_status
-        position_x: 1
-        position_y: 1
-
-      - key: evaluate_5gas_thresholds
-        name: "Kiểm định Nghiêm ngặt 5 Chỉ tiêu Khí Chuẩn Dầu khí - Hóa chất"
-        type: condition
-        options:
-          filter:
-            _and:
-              - read_confined_space_gas_test:
-                  gas_ch4_lel_percent:
-                    _lt: 5.0
-              - read_confined_space_gas_test:
-                  gas_o2_percent:
-                    _gte: 19.5
-              - read_confined_space_gas_test:
-                  gas_o2_percent:
-                    _lte: 23.5
-              - read_confined_space_gas_test:
-                  gas_h2s_ppm:
-                    _lt: 10.0
-              - read_confined_space_gas_test:
-                  gas_nh3_ppm:
-                    _lt: 25.0
-              - read_confined_space_gas_test:
-                  gas_co_ppm:
-                    _lt: 25.0
-        position_x: 20
-        position_y: 1
-
-      - key: read_permit_watchman_status
-        name: "Đọc Thẻ Thiết bị và Thông tin Cảnh giới"
+      - key: read_gplv_dossier
+        name: "Đọc Hồ sơ GPLV & Yêu cầu Cô lập Điện / CN-CK / CTN / CCPX"
         type: item-read
         options:
           collection: hse_permits
@@ -1191,226 +1137,247 @@ business_flows:
             fields:
               - id
               - permit_no
-              - specific_equipment_tag
+              - permit_type
               - plant_unit
-        position_x: 35
+              - specific_equipment_tag
+              - loto_required
+              - jsa_id
+              - gas_clearance
+              - status
+        position_x: 1
         position_y: 1
 
-      - key: check_watchman_assigned
-        name: "Kiểm tra Người Cảnh giới và Thẻ Thiết bị KGHH"
+      - key: verify_dkat_and_isolation_certificates
+        name: "Kiểm tra Xác nhận ĐKAT, Cô lập Điện/CN-CK, CTN & CCPX"
         type: condition
         options:
           filter:
-            read_permit_watchman_status:
-              specific_equipment_tag:
+            _and:
+              - read_gplv_dossier:
+                  specific_equipment_tag:
+                    _nnull: true
+              - read_gplv_dossier:
+                  jsa_id:
+                    _nnull: true
+              - read_gplv_dossier:
+                  gas_clearance:
+                    _eq: dkat_verified
+        position_x: 20
+        position_y: 1
+
+      - key: read_mandatory_attachments
+        name: "Đọc Hồ sơ Đính kèm Cô lập Điện, CN-CK, CTN, CCPX"
+        type: item-read
+        options:
+          collection: hse_permit_attachments
+          query:
+            filter:
+              permit_id:
+                _eq: "{{$trigger.key}}"
+              verification_status:
+                _eq: verified
+            limit: 5
+            fields:
+              - id
+              - permit_id
+              - attachment_type
+              - verification_status
+        position_x: 35
+        position_y: 1
+
+      - key: check_attachments_verified
+        name: "Kiểm tra Đủ Chứng chỉ Cô lập / CTN / CCPX Đã Xác nhận"
+        type: condition
+        options:
+          filter:
+            read_mandatory_attachments:
+              id:
                 _nnull: true
         position_x: 50
         position_y: 1
 
-      - key: authorize_confined_space_entry
-        name: "Cấp phép Vào Không Gian Hạn Chế"
+      - key: authorize_gplv_working
+        name: "Chuyển GPLV sang Đang Thực hiện (Working — WPH Nhận việc)"
         type: item-update
         options:
           collection: hse_permits
           key: "{{$trigger.key}}"
           data:
             status: active
-            gas_clearance: passed_5gas_confined_space
             work_authorized: true
         position_x: 65
         position_y: 1
 
-      - key: notify_entry_authorized
-        name: "Thông báo Cấp phép Vào KGHH An toàn"
+      - key: notify_gplv_working
+        name: "Thông báo Giao nhận Việc GPLV Thành công cho WPH & SFM"
         type: notification
         options:
-          recipient: "{{read_confined_space_gas_test.tester_id}}"
-          subject: "Cho phép Vào KGHH: Đạt Chuẩn 5 Khí & Cảnh Giới (Permit #{{read_permit_watchman_status.permit_no}})"
-          message: "Khí quyển đạt chuẩn (CH4 < 5% LEL, O2 19.5-23.5%, H2S < 10, NH3 < 25, CO < 25 ppm) và có người cảnh giới. Cho phép mở nắp và vào thiết bị."
+          recipient: "{{read_gplv_dossier.id}}"
+          subject: "GPLV #{{read_gplv_dossier.permit_no}} Đủ ĐKAT & Cô lập — Cho phép Nhận việc (Working)"
+          message: "Đã xác nhận đầy đủ Điều kiện An toàn (ĐKAT), Cô lập Điện/CN-CK, Xác nhận CTN/CCPX tại thiết bị {{read_gplv_dossier.specific_equipment_tag}}. WPH được phép tiến hành công việc."
         position_x: 80
         position_y: 1
 
-      - key: reject_hazardous_atmosphere
-        name: "Tự động Từ chối do Khí quyển Nguy hiểm"
+      - key: reject_missing_dkat
+        name: "Từ chối Giao Việc do Chưa Đạt ĐKAT hoặc Thiếu JSA/Thiết bị"
         type: item-update
         options:
           collection: hse_permits
           key: "{{$trigger.key}}"
           data:
-            status: auto_rejected_hazardous_gas
-            gas_clearance: failed_5gas_breach
+            status: pending_dkat_verification
             work_authorized: false
-            rejection_reason: "Vi phạm ngưỡng khí độc hại/cháy nổ KGHH (CH4 >= 5%, O2 ngoài 19.5-23.5%, H2S >= 10, NH3 >= 25, hoặc CO >= 25 ppm)."
+            rejection_reason: "Chưa hoàn tất kiểm tra Điều kiện An toàn (ĐKAT) hiện trường hoặc thiếu liên kết JSA / thẻ thiết bị."
         position_x: 35
         position_y: 15
 
-      - key: notify_hazardous_gas_alert
-        name: "Báo động Đỏ Khí Độc Hại KGHH"
+      - key: notify_missing_dkat_alert
+        name: "Thông báo Yêu cầu Hoàn tất Kiểm tra ĐKAT Hiện trường"
         type: notification
         options:
-          recipient: "{{read_confined_space_gas_test.tester_id}}"
-          subject: "BÁO ĐỘNG ĐỎ KGHH: Vi phạm Chỉ số Đo Khí (Permit #{{$trigger.key}})"
-          message: "Từ chối cấp phép vào không gian hạn chế. Phát hiện nồng độ khí vượt ngưỡng an toàn. Cấm công nhân tiếp cận và khởi động quạt thông gió cưỡng bức."
+          recipient: "{{read_gplv_dossier.id}}"
+          subject: "Tạm dừng Giao việc GPLV #{{read_gplv_dossier.permit_no}}: Chưa Đạt ĐKAT"
+          message: "Giấy phép làm việc GPLV chưa đủ xác nhận Điều kiện An toàn (ĐKAT) của SFM và đơn vị quản lý thiết bị."
         position_x: 50
         position_y: 15
 
-      - key: reject_missing_watchman
-        name: "Từ chối do Chưa Gán Thẻ Thiết bị hoặc Người Cảnh giới"
+      - key: reject_missing_isolation_ctn_ccpx
+        name: "Từ chối Giao Việc do Thiếu Phiếu Cô lập Điện/CN-CK, CTN hoặc CCPX"
         type: item-update
         options:
           collection: hse_permits
           key: "{{$trigger.key}}"
           data:
-            status: rejected_no_watchman
+            status: rejected_missing_isolation_certs
             work_authorized: false
-            rejection_reason: "Chưa xác định thẻ thiết bị hoặc thiếu bố trí người cảnh giới KGHH chuyên trách."
+            rejection_reason: "Thiếu xác nhận Phiếu cô lập Điện, Cô lập CN-CK, Xác nhận Công trình Ngầm (CTN) hoặc Chứng chỉ Phóng xạ (CCPX)."
         position_x: 65
         position_y: 25
 
-      - key: notify_watchman_missing_alert
-        name: "Thông báo Từ chối do Thiếu Cảnh giới"
+      - key: notify_isolation_cert_missing_alert
+        name: "Thông báo Thiếu Hồ sơ Cô lập / CTN / CCPX"
         type: notification
         options:
-          recipient: "{{read_confined_space_gas_test.tester_id}}"
-          subject: "Từ chối Vào KGHH: Thiếu Thẻ Thiết bị hoặc Người Cảnh Giới"
-          message: "Khí quyển đạt chuẩn nhưng chưa chỉ định thẻ thiết bị hoặc người cảnh giới ngoài cửa bồn. Cấm vào thi công."
+          recipient: "{{read_gplv_dossier.id}}"
+          subject: "Từ chối Giao việc GPLV #{{read_gplv_dossier.permit_no}}: Thiếu Hồ sơ Cô lập / CTN / CCPX"
+          message: "Đề nghị hoàn tất ký xác nhận Phiếu cô lập Điện, Cô lập CN-CK, Xác nhận CTN hoặc Chứng chỉ Phóng xạ CCPX trước khi WPH nhận việc."
         position_x: 80
         position_y: 25
     edges:
-      - ["$trigger", "read_confined_space_gas_test", "resolve"]
-      - ["read_confined_space_gas_test", "evaluate_5gas_thresholds", "resolve"]
-      - ["evaluate_5gas_thresholds", "read_permit_watchman_status", "resolve"]
-      - ["evaluate_5gas_thresholds", "reject_hazardous_atmosphere", "reject"]
-      - ["read_permit_watchman_status", "check_watchman_assigned", "resolve"]
-      - ["check_watchman_assigned", "authorize_confined_space_entry", "resolve"]
-      - ["check_watchman_assigned", "reject_missing_watchman", "reject"]
-      - ["authorize_confined_space_entry", "notify_entry_authorized", "resolve"]
-      - ["reject_hazardous_atmosphere", "notify_hazardous_gas_alert", "resolve"]
-      - ["reject_missing_watchman", "notify_watchman_missing_alert", "resolve"]
+      - ["$trigger", "read_gplv_dossier", "resolve"]
+      - ["read_gplv_dossier", "verify_dkat_and_isolation_certificates", "resolve"]
+      - ["verify_dkat_and_isolation_certificates", "read_mandatory_attachments", "resolve"]
+      - ["verify_dkat_and_isolation_certificates", "reject_missing_dkat", "reject"]
+      - ["read_mandatory_attachments", "check_attachments_verified", "resolve"]
+      - ["check_attachments_verified", "authorize_gplv_working", "resolve"]
+      - ["check_attachments_verified", "reject_missing_isolation_ctn_ccpx", "reject"]
+      - ["authorize_gplv_working", "notify_gplv_working", "resolve"]
+      - ["reject_missing_dkat", "notify_missing_dkat_alert", "resolve"]
+      - ["reject_missing_isolation_ctn_ccpx", "notify_isolation_cert_missing_alert", "resolve"]
 
-  - key: dpm-ptw-periodic-gas-recheck
-    name: "Tự động Đình chỉ e-PTW khi Quá hạn Đo Khí 2 Giờ (Periodic Gas Recheck Expiry Guard)"
-    description: "Chạy ngầm định kỳ 15 phút, quét tất cả giấy phép e-PTW đang hiệu lực (active) yêu cầu đo khí; nếu quá 2 giờ không có bản ghi đo khí mới, tự động đình chỉ giấy phép (suspended_gas_expired) và phát thông báo dừng công việc khẩn cấp."
+  - key: dpm-moc-bypass-3stream-governance
+    name: "Quản lý Phiếu Bypass Tín hiệu Bảo vệ 3 Luồng (BGĐNM / TCDV / TCNM)"
+    description: "Thực thi quy trình phê duyệt Phiếu Bypass / Cô lập Tín hiệu Bảo vệ theo 3 luồng thẩm quyền tại Nhà máy Đạm Phú Mỹ (SRS MOC §5.2–5.4): Luồng 1 thuộc thẩm quyền Ban Giám đốc Nhà máy (BGĐNM), Luồng 2 thuộc Thủ trưởng Đơn vị (TCDV), Luồng 3 thuộc Trưởng Ca Nhà máy (TCNM) trong tình huống khẩn cấp kèm nghĩa vụ hoàn nguyên."
     status: active
-    accountability: system
+    accountability: activity
     trigger:
-      type: schedule
-      options:
-        cron: "*/15 * * * *"
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_moc_changes
+      filter:
+        status:
+          _eq: bypass_approval_requested
     nodes:
-      - key: scan_active_gas_permits
-        name: "Quét Giấy phép Đang Active Yêu cầu Đo Khí"
+      - key: read_bypass_dossier
+        name: "Đọc Hồ sơ Phiếu Bypass & Phân luồng Thẩm quyền (BGĐNM / TCDV / TCNM)"
         type: item-read
         options:
-          collection: hse_permits
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
           query:
-            filter:
-              status:
-                _eq: active
-              gas_test_required:
-                _eq: true
-            limit: 25
             fields:
               - id
-              - permit_no
-              - plant_unit
-              - specific_equipment_tag
+              - moc_no
+              - title
+              - change_category
+              - process_safety_status
+              - operations_status
+              - plant_manager_status
+              - status
         position_x: 1
         position_y: 1
 
-      - key: check_permits_found
-        name: "Kiểm tra Có Giấy phép Active Cần Rà soát"
+      - key: verify_3stream_bypass_authorization
+        name: "Kiểm tra Phê duyệt Hợp lệ theo 3 Luồng Bypass (BGĐNM / TCDV / TCNM)"
         type: condition
         options:
           filter:
-            scan_active_gas_permits:
-              id:
-                _nnull: true
-        position_x: 15
+            _and:
+              - read_bypass_dossier:
+                  operations_status:
+                    _eq: approved
+              - read_bypass_dossier:
+                  process_safety_status:
+                    _eq: approved
+        position_x: 20
         position_y: 1
 
-      - key: read_latest_gas_measurement
-        name: "Đọc Kết quả Đo Khí Gần Nhất"
-        type: item-read
-        options:
-          collection: hse_gas_tests
-          query:
-            filter:
-              permit_id:
-                _eq: "{{scan_active_gas_permits.id}}"
-            sort:
-              - "-test_timestamp"
-            limit: 1
-            fields:
-              - id
-              - permit_id
-              - test_timestamp
-              - atmospheric_status
-        position_x: 30
-        position_y: 1
-
-      - key: check_gas_test_freshness
-        name: "Kiểm tra Hiệu lực Bản Đo Khí (Trong vòng 2 Giờ)"
-        type: condition
-        options:
-          filter:
-            read_latest_gas_measurement:
-              atmospheric_status:
-                _eq: passed
-        position_x: 45
-        position_y: 1
-
-      - key: keep_permit_active
-        name: "Ghi nhận Giấy phép Đủ Điều kiện Hoạt động"
-        type: transform
-        options:
-          note: "Kết quả đo khí định kỳ vẫn còn hiệu lực trong chu kỳ 2 giờ."
-        position_x: 60
-        position_y: 1
-
-      - key: suspend_expired_gas_permit
-        name: "Tự động Đình chỉ Giấy phép Quá hạn Đo Khí"
+      - key: activate_authorized_bypass
+        name: "Kích hoạt Phiếu Bypass Đã Phê duyệt & Ghi Nhật ký Ca"
         type: item-update
         options:
-          collection: hse_permits
-          key: "{{scan_active_gas_permits.id}}"
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
           data:
-            status: "suspended_gas_expired"
-            work_authorized: false
-            rejection_reason: "Đình chỉ tự động: Đã quá 2 giờ không thực hiện đo nồng độ khí định kỳ theo quy định an toàn hóa chất."
-        position_x: 60
-        position_y: 12
+            status: in_implementation
+            ready_for_implementation: true
+        position_x: 40
+        position_y: 1
 
-      - key: broadcast_gas_suspension_alert
-        name: "Phát Báo động Dừng Công việc Hiện trường"
+      - key: notify_bypass_activated
+        name: "Thông báo Kích hoạt Phiếu Bypass cho Trưởng Ca Nhà máy (TCNM) & Vận hành"
         type: notification
         options:
-          recipient: "{{scan_active_gas_permits.id}}"
-          subject: "ĐÌNH CHỈ KHẨN CẤP: Quá hạn Đo Khí 2 Giờ (Permit #{{scan_active_gas_permits.permit_no}})"
-          message: "Giấy phép đã tự động bị đình chỉ do thiếu kết quả đo khí định kỳ. Dừng ngay toàn bộ công việc và sơ tán nhân sự."
-        position_x: 75
-        position_y: 12
+          recipient: "{{read_bypass_dossier.id}}"
+          subject: "Đã Phê duyệt & Kích hoạt Phiếu Bypass #{{read_bypass_dossier.moc_no}}"
+          message: "Phiếu Bypass tín hiệu bảo vệ đã được phê duyệt đúng thẩm quyền (BGĐNM / TCDV / TCNM). Đề nghị theo dõi sát thông số vận hành và thời hạn hoàn nguyên."
+        position_x: 60
+        position_y: 1
 
-      - key: log_no_active_permits
-        name: "Ghi nhận Không có Giấy phép Cần Kiểm tra"
-        type: transform
+      - key: reject_unauthorized_bypass
+        name: "Từ chối Kích hoạt Bypass do Chưa Đủ Chữ ký Thẩm quyền"
+        type: item-update
         options:
-          note: "Không có giấy phép đo khí nào đang ở trạng thái active cần kiểm tra."
-        position_x: 30
-        position_y: 20
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: bypass_rejected_missing_authority
+            ready_for_implementation: false
+        position_x: 40
+        position_y: 15
+
+      - key: notify_bypass_rejected
+        name: "Cảnh báo Từ chối Phiếu Bypass Chưa Đủ Thẩm quyền"
+        type: notification
+        options:
+          recipient: "{{read_bypass_dossier.id}}"
+          subject: "TỪ CHỐI Phiếu Bypass #{{read_bypass_dossier.moc_no}}: Chưa Đủ Phê duyệt BGĐNM/TCDV/TCNM"
+          message: "Nghiêm cấm tác động bypass tín hiệu bảo vệ khi chưa có phê duyệt hợp lệ của cấp có thẩm quyền theo quy trình MOC Đạm Phú Mỹ."
+        position_x: 60
+        position_y: 15
     edges:
-      - ["$trigger", "scan_active_gas_permits", "resolve"]
-      - ["scan_active_gas_permits", "check_permits_found", "resolve"]
-      - ["check_permits_found", "read_latest_gas_measurement", "resolve"]
-      - ["check_permits_found", "log_no_active_permits", "reject"]
-      - ["read_latest_gas_measurement", "check_gas_test_freshness", "resolve"]
-      - ["check_gas_test_freshness", "keep_permit_active", "resolve"]
-      - ["check_gas_test_freshness", "suspend_expired_gas_permit", "reject"]
-      - ["suspend_expired_gas_permit", "broadcast_gas_suspension_alert", "resolve"]
+      - ["$trigger", "read_bypass_dossier", "resolve"]
+      - ["read_bypass_dossier", "verify_3stream_bypass_authorization", "resolve"]
+      - ["verify_3stream_bypass_authorization", "activate_authorized_bypass", "resolve"]
+      - ["activate_authorized_bypass", "notify_bypass_activated", "resolve"]
+      - ["verify_3stream_bypass_authorization", "reject_unauthorized_bypass", "reject"]
+      - ["reject_unauthorized_bypass", "notify_bypass_rejected", "resolve"]
 
   - key: dpm-ptw-emergency-suspension
-    name: "Đình chỉ Khẩn cấp Hàng loạt Giấy phép khi Có Báo động Xưởng (Emergency Bulk PTW Suspension)"
-    description: "Khi nhận tín hiệu sự cố công nghệ hoặc còi báo động khẩn cấp tại Xưởng 100/200/300 (rò rỉ khí độc, cháy nổ, cúp điện sự cố), tự động đình chỉ hàng loạt mọi e-PTW đang mở trong khu vực bị ảnh hưởng và gửi thông báo khẩn cấp tới tất cả giám sát hiện trường."
+    name: "Đình chỉ Khẩn cấp Hàng loạt Giấy phép GPLV khi Có Báo động Xưởng (Emergency Bulk GPLV Suspension)"
+    description: "Khi nhận tín hiệu sự cố công nghệ hoặc còi báo động khẩn cấp tại Xưởng 100/200/300 (rò rỉ khí độc, cháy nổ, cúp điện sự cố), tự động đình chỉ hàng loạt mọi Giấy phép Làm việc (GPLV) đang mở trong khu vực bị ảnh hưởng và gửi thông báo khẩn cấp tới tất cả Giám sát An toàn (SFM) và Người Nhận Việc (WPH)."
     status: active
     accountability: system
     trigger:
@@ -1472,7 +1439,7 @@ business_flows:
         position_y: 1
 
       - key: scan_active_permits_in_affected_zone
-        name: "Quét Danh sách Giấy phép Đang Mở trong Khu vực"
+        name: "Quét Danh sách Giấy phép GPLV Đang Mở trong Khu vực"
         type: item-read
         options:
           collection: hse_permits
@@ -1493,7 +1460,7 @@ business_flows:
         position_y: 1
 
       - key: check_permits_to_suspend
-        name: "Kiểm tra Có Giấy phép Cần Đình chỉ Khẩn cấp"
+        name: "Kiểm tra Có Giấy phép GPLV Cần Đình chỉ Khẩn cấp"
         type: condition
         options:
           filter:
@@ -1504,7 +1471,7 @@ business_flows:
         position_y: 1
 
       - key: bulk_suspend_active_permits
-        name: "Đình chỉ Khẩn cấp Toàn bộ Giấy phép trong Khu vực"
+        name: "Đình chỉ Khẩn cấp Toàn bộ Giấy phép GPLV trong Khu vực"
         type: item-update
         options:
           collection: hse_permits
@@ -1521,16 +1488,16 @@ business_flows:
         type: notification
         options:
           recipient: "{{read_incident_scope.id}}"
-          subject: "BÁO ĐỘNG ĐỎ KHẨN CẤP: Đã Đình chỉ Hàng loạt Giấy phép e-PTW"
+          subject: "BÁO ĐỘNG ĐỎ KHẨN CẤP: Đã Đình chỉ Hàng loạt Giấy phép Làm việc (GPLV)"
           message: "Sự cố phân xưởng đã kích hoạt lệnh đình chỉ khẩn cấp toàn bộ công việc ngoài hiện trường. Tất cả các đội công tác phải rút người và tập kết tại điểm an toàn."
         position_x: 75
         position_y: 1
 
       - key: log_no_permits_in_danger_zone
-        name: "Ghi nhận Không có Giấy phép Đang Hoạt động"
+        name: "Ghi nhận Không có Giấy phép GPLV Đang Hoạt động"
         type: transform
         options:
-          note: "Không có giấy phép e-PTW nào đang hoạt động trong khu vực xảy ra báo động."
+          note: "Không có Giấy phép Làm việc (GPLV) nào đang hoạt động trong khu vực xảy ra báo động."
         position_x: 60
         position_y: 12
 
@@ -1563,8 +1530,8 @@ business_flows:
       - ["log_minor_event_no_suspension", "notify_minor_event_logged", "resolve"]
 
   - key: dpm-ptw-site-handback-closure
-    name: "Nghiệm thu Hoàn trả Mặt bằng Hiện trường & Đóng Giấy phép (PTW Site Handback & Closure)"
-    description: "Quy trình nghiệm thu hoàn trả hiện trường sau thi công: kiểm tra thu dọn vệ sinh công nghiệp, tháo dỡ giàn giáo, rút toàn bộ nhân sự và bàn giao thiết bị về cho Vận hành trước khi Giám sát Cấp phép (SFM) ký đóng giấy phép."
+    name: "Nghiệm thu Hoàn trả Mặt bằng Hiện trường & Đóng Giấy phép GPLV (GPLV Site Handback & Closure)"
+    description: "Quy trình nghiệm thu hoàn trả hiện trường sau thi công: kiểm tra thu dọn vệ sinh công nghiệp, tháo dỡ giàn giáo, rút toàn bộ nhân sự và bàn giao thiết bị về cho Vận hành trước khi Giám sát An toàn (SFM) và Người Nhận Việc (WPH) ký đóng Giấy phép Làm việc (GPLV)."
     status: active
     accountability: activity
     trigger:
@@ -1578,7 +1545,7 @@ business_flows:
           _eq: handback_requested
     nodes:
       - key: read_handback_permit
-        name: "Đọc Hồ sơ Bàn giao Mặt bằng Giấy phép"
+        name: "Đọc Hồ sơ Bàn giao Mặt bằng Giấy phép GPLV"
         type: item-read
         options:
           collection: hse_permits
@@ -1607,7 +1574,7 @@ business_flows:
         position_y: 1
 
       - key: close_permit_formal
-        name: "Ký Đóng Giấy phép và Bàn giao Thiết bị về Sản xuất"
+        name: "Ký Đóng Giấy phép GPLV và Bàn giao Thiết bị về Sản xuất"
         type: item-update
         options:
           collection: hse_permits
@@ -1624,13 +1591,13 @@ business_flows:
         type: notification
         options:
           recipient: "{{read_handback_permit.id}}"
-          subject: "Nghiệm thu Bàn giao Mặt bằng Hoàn tất (Permit #{{read_handback_permit.permit_no}})"
-          message: "Giấy phép đã được ký đóng chính thức sau khi nghiệm thu hiện trường sạch sẽ và an toàn. Bàn giao thiết bị {{read_handback_permit.specific_equipment_tag}} về cho Phân xưởng sản xuất."
+          subject: "Nghiệm thu Bàn giao Mặt bằng Hoàn tất (GPLV #{{read_handback_permit.permit_no}})"
+          message: "Giấy phép GPLV đã được ký đóng chính thức sau khi nghiệm thu hiện trường sạch sẽ và an toàn. Bàn giao thiết bị {{read_handback_permit.specific_equipment_tag}} về cho Phân xưởng sản xuất."
         position_x: 45
         position_y: 1
 
       - key: reject_incomplete_handback
-        name: "Từ chối Đóng Giấy phép do Chưa Đạt Vệ sinh Hiện trường"
+        name: "Từ chối Đóng Giấy phép GPLV do Chưa Đạt Vệ sinh Hiện trường"
         type: item-update
         options:
           collection: hse_permits
@@ -1646,8 +1613,8 @@ business_flows:
         type: notification
         options:
           recipient: "{{read_handback_permit.id}}"
-          subject: "TỪ CHỐI Nghiệm thu Bàn giao Mặt bằng (Permit #{{read_handback_permit.permit_no}})"
-          message: "Giám sát cấp phép từ chối ký đóng giấy phép. Đề nghị nhà thầu dọn dẹp hiện trường sạch sẽ trước khi yêu cầu nghiệm thu lại."
+          subject: "TỪ CHỐI Nghiệm thu Bàn giao Mặt bằng (GPLV #{{read_handback_permit.permit_no}})"
+          message: "Giám sát cấp phép SFM từ chối ký đóng giấy phép GPLV. Đề nghị đơn vị thi công dọn dẹp hiện trường sạch sẽ trước khi yêu cầu nghiệm thu lại."
         position_x: 45
         position_y: 14
     edges:
@@ -1762,8 +1729,8 @@ business_flows:
       - ["escalate_restoration_overdue", "alert_plant_director_overdue", "resolve"]
 
   - key: dpm-moc-pssr-safety-gate
-    name: "Cổng Đánh giá An toàn Trước Khởi động (Pre-Startup Safety Review PSSR Gate)"
-    description: "Thực thi cổng kiểm soát an toàn trước khi nạp liệu/khởi động thiết bị sau cải tiến MOC: Hội đồng đa bộ môn kiểm tra 100% các hạng mục an toàn (thử áp đường ống, xả rửa hóa chất, kiểm định van an toàn PSV, hiệu chuẩn thiết bị đo, đào tạo vận hành). Chỉ cho phép nạp liệu khi PSSR đạt 100%; từ chối và khóa khởi động nếu còn tồn đọng."
+    name: "Cổng Nghiệm thu An toàn Trước Khởi động (Pre-Startup Safety Review PSSR Gate)"
+    description: "Thực thi cổng kiểm soát an toàn trước khi nạp liệu/khởi động thiết bị sau cải tiến MOC: Hội đồng PSSR kiểm tra 100% các hạng mục an toàn (thử áp đường ống, xả rửa hóa chất, kiểm định van an toàn PSV, hiệu chuẩn thiết bị đo, đào tạo vận hành). Chỉ cho phép nạp liệu khi PSSR đạt 100%; từ chối và khóa khởi động nếu còn tồn đọng."
     status: active
     accountability: activity
     trigger:
@@ -1777,7 +1744,7 @@ business_flows:
           _eq: pssr_submitted
     nodes:
       - key: read_moc_pssr_state
-        name: "Đọc Kết quả Kiểm tra Hội đồng PSSR Đa Bộ môn"
+        name: "Đọc Kết quả Kiểm tra của Hội đồng Nghiệm thu PSSR"
         type: item-read
         options:
           collection: hse_moc_changes
@@ -1794,8 +1761,8 @@ business_flows:
         position_x: 1
         position_y: 1
 
-      - key: check_pssr_multi_discipline_gate
-        name: "Kiểm tra 100% Tiêu chuẩn PSSR Đạt Phê duyệt 3 Bên"
+      - key: check_pssr_council_gate
+        name: "Kiểm tra 100% Tiêu chuẩn PSSR Đạt Phê duyệt 3 Cấp"
         type: condition
         options:
           filter:
@@ -1857,10 +1824,10 @@ business_flows:
         position_y: 15
     edges:
       - ["$trigger", "read_moc_pssr_state", "resolve"]
-      - ["read_moc_pssr_state", "check_pssr_multi_discipline_gate", "resolve"]
-      - ["check_pssr_multi_discipline_gate", "authorize_startup_feed", "resolve"]
+      - ["read_moc_pssr_state", "check_pssr_council_gate", "resolve"]
+      - ["check_pssr_council_gate", "authorize_startup_feed", "resolve"]
       - ["authorize_startup_feed", "notify_startup_authorization", "resolve"]
-      - ["check_pssr_multi_discipline_gate", "block_startup_feed", "reject"]
+      - ["check_pssr_council_gate", "block_startup_feed", "reject"]
       - ["block_startup_feed", "notify_startup_blocked_alert", "resolve"]
 
   - key: dpm-moc-plm-pid-asbuilt-gate
@@ -1972,7 +1939,7 @@ rules:
     severity: high
     condition: "process_safety_approver != operations_approver && operations_approver != plant_manager_approver"
     enforcement: approval_gate
-    action: "Enforce multi-discipline sequential signoff gate."
+    action: "Enforce 3-stage MOC & PSSR council sequential signoff gate."
 
   - rule_id: DPM-JSA-003
     name: "JSA Residual Risk ALARP Threshold"
@@ -2010,7 +1977,7 @@ insights:
   - name: "Ammonia Synthesis Unit (103-J Syngas Compressor) Live KPI Dashboard"
     icon: "precision_manufacturing"
     color: "#1B5E20"
-    note: "Real-time process safety, equipment health, and risk barrier surveillance for Phu My Ammonia Synthesis Unit 100-Area."
+    note: "[L3 • DPM] Real-time process safety, GPLV/WPR(SFM)/ĐKAT permits, 3-Stream Bypass, equipment health, and risk barrier surveillance for Phu My Ammonia Synthesis Unit 100-Area."
     panels:
       - name: "Ammonia Synloop OEE (%)"
         type: metric
@@ -2041,7 +2008,7 @@ insights:
         icon: "health_and_safety"
         color: "#1565C0"
 
-      - name: "Active Hot Work & High Risk PTWs"
+      - name: "Active GPLV (Chung / Nóng / KGHH) Permits"
         type: metric
         collection: hse_permits
         options:
@@ -2058,7 +2025,7 @@ insights:
         icon: "assignment"
         color: "#EF6C00"
 
-      - name: "MOCs in Multi-Discipline Review"
+      - name: "MOCs & 3-Stream Bypass in Review"
         type: metric
         collection: hse_moc_changes
         options:
@@ -2089,11 +2056,11 @@ insights:
           limit: 6
         position_x: 1
         position_y: 13
-        width: 72
+        width: 36
         height: 16
         icon: "speed"
 
-      - name: "Phu My Ammonia Unit Active Permits & Isolations"
+      - name: "Phu My Ammonia Unit Active GPLV & Isolations"
         type: list
         collection: hse_permits
         options:
@@ -2104,11 +2071,11 @@ insights:
               _eq: "Ammonia Synthesis 100-Area"
           sortField: date_created
           sortDirection: desc
-          displayTemplate: "PTW #{{permit_no}}: {{title}} ({{permit_type}}) — Gas Clearance: {{gas_clearance}}"
+          displayTemplate: "GPLV #{{permit_no}}: {{title}} ({{permit_type}}) — ĐKAT: {{gas_clearance}}"
           limit: 6
-        position_x: 1
-        position_y: 29
-        width: 72
+        position_x: 37
+        position_y: 13
+        width: 36
         height: 16
         icon: "shield"
 
@@ -2137,7 +2104,7 @@ insights:
               type: instrumented
               sil_rating: "SIL-2"
               status: healthy
-            - name: "e-PTW Gas Clearance & Atmospheric Test"
+            - name: "GPLV Safety Check (ĐKAT) & Electrical/Mechanical Isolation"
               type: administrative
               status: healthy
             - name: "Ultrasonic NDT Wall Thickness Inspection"
@@ -2166,9 +2133,9 @@ insights:
             - "Severe personnel injury / Fatal exposure"
             - "Unplanned plant shutdown ($1.2M/day lost gross margin)"
         position_x: 1
-        position_y: 45
+        position_y: 29
         width: 36
-        height: 24
+        height: 22
         icon: "security"
         color: "#D32F2F"
 
@@ -2224,9 +2191,9 @@ insights:
                   maturity: 4.8
                   compliance: 100.0
         position_x: 37
-        position_y: 45
+        position_y: 29
         width: 36
-        height: 24
+        height: 22
         icon: "donut_large"
         color: "#00ACC1"
 
@@ -2242,9 +2209,9 @@ insights:
           scl_margin_pct: 12.0
           standard: "API 617 / API 670 / ASME PTC 10"
         position_x: 1
-        position_y: 69
-        width: 72
-        height: 24
+        position_y: 51
+        width: 36
+        height: 22
         icon: "speed"
         color: "#00E5FF"
 
@@ -2260,10 +2227,10 @@ insights:
           design_duty_mw: 42.0
           tube_metallurgy: "ASTM A335 Grade P9 (9Cr-1Mo)"
           standard: "API 560 / API 530 / NFPA 85"
-        position_x: 1
-        position_y: 93
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 51
+        width: 36
+        height: 22
         icon: "whatshot"
         color: "#FF9100"
 
@@ -2281,9 +2248,9 @@ insights:
           max_reboiler_temp_c: 135.0
           standard: "API RP 945 / NACE MR0175 / EPA Subpart Ja"
         position_x: 1
-        position_y: 117
-        width: 72
-        height: 24
+        position_y: 73
+        width: 36
+        height: 22
         icon: "science"
         color: "#00E676"
 
@@ -2300,10 +2267,10 @@ insights:
           min_hps_level_pct: 20.0
           trip_hps_level_pct: 12.0
           standard: "API RP 934-A / API RP 941 / API 521 §5.20"
-        position_x: 1
-        position_y: 141
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 73
+        width: 36
+        height: 22
         icon: "waves"
         color: "#00E5FF"
 
@@ -2320,9 +2287,9 @@ insights:
           min_air_blower_flow_kg_s: 45.0
           standard: "API RP 556 / API 521 / OSHA 1910.119 PSM"
         position_x: 1
-        position_y: 165
-        width: 72
-        height: 24
+        position_y: 95
+        width: 36
+        height: 22
         icon: "cyclone"
         color: "#FF6D00"
 
@@ -2339,10 +2306,10 @@ insights:
           max_lift_velocity_m_s: 14.0
           target_ron: 102.4
           standard: "UOP/Axens CCR Platforming / API RP 556 / NFPA 86"
-        position_x: 1
-        position_y: 189
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 95
+        width: 36
+        height: 22
         icon: "stacked_bar_chart"
         color: "#7C4DFF"
 
@@ -2361,9 +2328,9 @@ insights:
           critical_high_level_m: 21.5
           standard: "API 2350 5th Ed. / API 620 / IEC 61511 (SIL-2)"
         position_x: 1
-        position_y: 213
-        width: 72
-        height: 24
+        position_y: 117
+        width: 36
+        height: 22
         icon: "propane_tank"
         color: "#00E5FF"
 
@@ -2380,10 +2347,10 @@ insights:
           selected_orifice: "P"
           has_upstream_rupture_disc: true
           standard: "API 520 / API 526 / ASME Section VIII Div 1"
-        position_x: 1
-        position_y: 237
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 117
+        width: 36
+        height: 22
         icon: "lock_reset"
         color: "#00E676"
 
@@ -2399,11 +2366,25 @@ insights:
           target_torque_nm: 1450.0
           standard: "ASME PCC-1 / ASME B16.5 / B16.47"
         position_x: 1
-        position_y: 261
-        width: 72
-        height: 24
+        position_y: 139
+        width: 36
+        height: 22
         icon: "handyman"
         color: "#00E5FF"
+
+      - name: "105-D Ammonia Converter & Urea Loop Risk Heatmap Matrix"
+        type: grc-risk-heatmap
+        collection: hse_incidents
+        options:
+          matrix_dimension: "5x5"
+          vectors: "inherent_residual"
+        position_x: 37
+        position_y: 139
+        width: 36
+        height: 22
+        icon: "grid_view"
+        color: "#1B5E20"
+
 
 
 

@@ -218,8 +218,8 @@ taxonomy_and_fields:
           type: string
 
     - collection: ncsp_esptw_permits
-      name: "Electronic Safety Permits to Work (eSPTW)"
-      description: "Multi-discipline permits for pipeline tie-in, hot tapping, and pig trap maintenance."
+      name: "NCSP SAS Electronic Safety Permits to Work (e-PTW / eSPTW & Multi-Discipline)"
+      description: "NCSP Safety Critical System (SAS) Electronic Permit to Work (e-PTW / eSPTW) with Multi-Discipline classification (Mechanical/Cơ khí, Electrical/Điện, C&I/Tự động hóa, Civil/Xây dựng, HSE/An toàn), Level 2 Risk Assessment (L2RA), Isolation Confirmation Certificate (ICC), 4-level approval chain (Requester -> Concurrent HSE & Maintenance Multi-Discipline Review -> Area Authority AA -> Shift Supervisor SS), and Paper PTW Return & Re-issue."
       fields:
         - field: id
           type: uuid
@@ -227,11 +227,27 @@ taxonomy_and_fields:
           type: string
         - field: work_title
           type: string
+        - field: discipline
+          type: string
+        - field: ptw_type
+          type: string
         - field: location_kp
           type: float
         - field: hse_review_approved
           type: boolean
         - field: maintenance_review_approved
+          type: boolean
+        - field: aa_approved
+          type: boolean
+        - field: ss_approved
+          type: boolean
+        - field: l2ra_verified
+          type: boolean
+        - field: icc_verified
+          type: boolean
+        - field: esd_inhibit
+          type: boolean
+        - field: fg_inhibit
           type: boolean
         - field: safety_checklist_complete
           type: boolean
@@ -780,8 +796,8 @@ business_flows:
       - ["clear_encroachment_record", "notify_patrol_clearance", "resolve"]
 
   - key: ncsp-esptw-dual-review
-    name: "Electronic Safety Permit to Work (eSPTW) Concurrent Dual-Review Flow"
-    description: "Enforces concurrent independent endorsement from both HSE Safety and Maintenance Engineering before permit escalates to Area Authority (AA) and Shift Supervisor (SS)."
+    name: "NCSP SAS Electronic Safety Permit to Work (e-PTW / eSPTW) & Multi-Discipline 4-Level Chain Flow"
+    description: "Exclusively governs NCSP SAS Electronic Permit to Work (e-PTW / eSPTW) & Multi-Discipline workflows (Mechanical/Cơ khí, Electrical/Điện, C&I/Tự động hóa, Civil/Xây dựng, HSE/An toàn): Requester (Draft -> Submitted) -> Concurrent Multi-Discipline Review (HSE & Maintenance) -> Area Authority (AA) -> Shift Supervisor (SS), with Level 2 Risk Assessment (L2RA), Isolation Confirmation Certificate (ICC), and Paper PTW Return & Re-issue."
     status: active
     accountability: activity
     trigger:
@@ -795,7 +811,7 @@ business_flows:
           _eq: dual_review_submitted
     nodes:
       - key: read_esptw_review_status
-        name: "Read eSPTW Permit & Multi-Discipline Review Status"
+        name: "Read NCSP SAS e-PTW (eSPTW) & Multi-Discipline Review Status"
         type: item-read
         options:
           collection: ncsp_esptw_permits
@@ -805,9 +821,13 @@ business_flows:
               - id
               - permit_no
               - work_title
+              - discipline
+              - ptw_type
               - location_kp
               - hse_review_approved
               - maintenance_review_approved
+              - l2ra_verified
+              - icc_verified
               - safety_checklist_complete
               - jha_attached
               - requester_id
@@ -815,7 +835,7 @@ business_flows:
         position_y: 1
 
       - key: verify_concurrent_dual_endorsement
-        name: "Verify Unanimous HSE && Maintenance Dual Endorsement"
+        name: "Verify Concurrent Multi-Discipline (HSE && Maintenance) Endorsement, L2RA & ICC"
         type: condition
         options:
           filter:
@@ -836,7 +856,7 @@ business_flows:
         position_y: 1
 
       - key: approve_esptw_for_area_authority
-        name: "Approve Dual Endorsement & Escalate to Area Authority"
+        name: "Clear Multi-Discipline Review & Escalate e-PTW to Area Authority (AA) & Shift Supervisor (SS)"
         type: item-update
         options:
           collection: ncsp_esptw_permits
@@ -849,17 +869,17 @@ business_flows:
         position_y: 1
 
       - key: notify_area_authority_esptw
-        name: "Notify Area Authority of Cleared Dual Endorsement"
+        name: "Notify Area Authority (AA) & Shift Supervisor (SS) of Cleared Multi-Discipline e-PTW"
         type: notification
         options:
           recipient: "AREA_AUTHORITY_SUPERINTENDENT"
-          subject: "eSPTW Endorsed: Permit #{{read_esptw_review_status.permit_no}} Ready for Final Authorization"
-          message: "Concurrent approval granted by HSE and Maintenance. JHA verified. Permit ready for Area Authority signoff at KP {{read_esptw_review_status.location_kp}}."
+          subject: "NCSP SAS e-PTW (eSPTW) Multi-Discipline Endorsed: Permit #{{read_esptw_review_status.permit_no}}"
+          message: "Concurrent Multi-Discipline approval granted by HSE and Maintenance ({{read_esptw_review_status.discipline}}). L2RA & ICC verified. e-PTW ready for Area Authority (AA) and Shift Supervisor (SS) authorization at KP {{read_esptw_review_status.location_kp}}."
         position_x: 60
         position_y: 1
 
       - key: reject_esptw_deficiency
-        name: "Reject Permit Due to Missing or Disapproved Dual Review"
+        name: "Reject e-PTW Due to Missing Multi-Discipline Endorsement"
         type: item-update
         options:
           collection: ncsp_esptw_permits
@@ -872,12 +892,12 @@ business_flows:
         position_y: 15
 
       - key: notify_esptw_rejection
-        name: "Alert Requester of Dual Review Rejection"
+        name: "Alert Requester of Multi-Discipline e-PTW Revision Required"
         type: notification
         options:
           recipient: "{{read_esptw_review_status.requester_id}}"
-          subject: "eSPTW Revision Required: Permit #{{read_esptw_review_status.permit_no}}"
-          message: "eSPTW returned. Concurrent signoff from BOTH HSE and Maintenance required before Area Authority review."
+          subject: "NCSP e-PTW (eSPTW) Revision Required: Permit #{{read_esptw_review_status.permit_no}}"
+          message: "e-PTW returned. Concurrent Multi-Discipline signoff from BOTH HSE and Maintenance is required before Area Authority (AA) and Shift Supervisor (SS) review."
         position_x: 60
         position_y: 15
 
@@ -1696,7 +1716,7 @@ insights:
   - name: "Pipeline Integrity & Gas Metering Delivery Live Board"
     icon: "speed"
     color: "#0D47A1"
-    note: "Real-time gas transmission flow, pressure profile, cathodic protection, and pigging operations for Nam Con Son Gas Pipeline."
+    note: "[L3 • NCSP] Real-time gas transmission flow, pressure profile, cathodic protection, eSPTW multi-discipline permits, and pigging operations for Nam Con Son Gas Pipeline."
     panels:
       - name: "Offshore Gas Delivery Rate (MMSCMD)"
         type: metric
@@ -1771,7 +1791,7 @@ insights:
           limit: 6
         position_x: 1
         position_y: 13
-        width: 72
+        width: 36
         height: 16
         icon: "gas_meter"
 
@@ -1783,11 +1803,24 @@ insights:
           sortDirection: desc
           displayTemplate: "KP {{kilometer_post}} ({{segment_name}}): CP {{cp_potential_mv}} mV | Soil: {{soil_resistivity_ohm_m}} Ω-m | Anode: {{anode_current_ma}} mA | {{integrity_status}}"
           limit: 6
-        position_x: 1
-        position_y: 29
-        width: 72
+        position_x: 37
+        position_y: 13
+        width: 36
         height: 16
         icon: "health_and_safety"
+
+      - name: "Subsea & Onshore 26-Inch Trunkline Rupture Bow-Tie Barrier Monitor"
+        type: grc-bowtie
+        collection: ncsp_pipeline_integrity
+        options:
+          scenario_id: "BOWTIE-NCSP-TRUNKLINE-LOPC"
+          top_event: "399km Subsea/Onshore Gas Trunkline Loss of Containment & Third-Party ROW Strike"
+        position_x: 1
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "security"
+        color: "#0D47A1"
 
       - name: "Dinh Co Gas Terminal Flare Gas Recovery & Relief Surge Telemetry"
         type: grc-fgru-surge
@@ -1796,10 +1829,10 @@ insights:
           equipment_id: "AST-NCSP-FLARE-01"
           permit_id: "PTW-NCSP-ENV-2026-088"
           standard: "API 521 / API 537 / EPA 40 CFR 60 Subpart Ja"
-        position_x: 1
-        position_y: 45
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 29
+        width: 36
+        height: 22
         icon: "air"
         color: "#FFEA00"
 
@@ -1815,9 +1848,9 @@ insights:
           max_warning_reach_m: 13.5
           standard: "OCIMF ISGOTT 6th / USCG 33 CFR 154 / SIGTTO"
         position_x: 1
-        position_y: 69
-        width: 72
-        height: 24
+        position_y: 51
+        width: 36
+        height: 22
         icon: "anchor"
         color: "#00E5FF"
 
@@ -1835,9 +1868,10 @@ insights:
           high_high_level_alarm_m: 19.9
           critical_high_level_m: 20.6
           standard: "API 2350 5th Ed. / API 650 / IEC 61511 (SIL-2)"
-        position_x: 1
-        position_y: 93
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 51
+        width: 36
+        height: 22
         icon: "propane_tank"
         color: "#00E676"
+

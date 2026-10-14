@@ -4,14 +4,19 @@ industry_vertical: thermal_power
 archetype: "AES Mong Duong Thermal Power Plant Archetype"
 
 metadata:
-  name: "AES Mong Duong Thermal Power Plant Resilience Template"
-  description: "Operational resilience, electrical isolation, and environmental emissions surveillance template for 2x560MW coal-fired thermal power plants based on the AES Mong Duong archetype."
+  name: "AES Mong Duong Thermal Power Plant Resilience Template (PTW-AES)"
+  description: "Operational resilience, PTW-AES (HAZOP/LOPA, SIMOPS Plot Plant, CSP & HWP Entry Point Condition Monitoring for LEL/H2S/NH3/O2/CO without hardware interlock, 12-state LOTO & Lockbox), and CEMS environmental surveillance template for 2x560MW coal-fired thermal power plants."
   status: VERIFIED
   author: "Industry Template Architect & Engine Specialist"
   approver: "Zen Phạm"
   created_at: "2026-10-04"
   tags:
     - thermal_power
+    - ptw_aes
+    - hazop
+    - lopa
+    - simops
+    - csp_hwp_condition_monitoring
     - cfb_boiler
     - steam_turbine
     - high_voltage
@@ -22,6 +27,7 @@ metadata:
   regulatory_frameworks:
     - "TCVN 7440:2005 Thermal Power Plant Emission Standards"
     - "OSHA 1910.147 Control of Hazardous Energy (LOTO)"
+    - "IEC 61882 HAZOP & IEC 61511 LOPA Process Hazard Analysis"
     - "Circular 10/2021/TT-BTNMT Environmental Monitoring Regulations"
     - "NFPA 850 Recommended Practice for Fire Protection for Electric Generating Plants"
 
@@ -367,6 +373,116 @@ taxonomy_and_fields:
         - field: quota_limit_kg_kwh
           type: float
         - field: verification_status
+          type: string
+
+    - collection: hse_hazop_studies
+      name: "PTW-AES HAZOP & LOPA Process Hazard Studies"
+      description: "HAZOP node deviations and Layer of Protection Analysis (LOPA) Independent Protection Layers (IPL) owned by PTW-AES."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: identifier
+          type: string
+        - field: status
+          type: string
+        - field: facilitator
+          type: uuid
+        - field: approved_by
+          type: uuid
+        - field: approval_evidence
+          type: text
+
+    - collection: aes_ptw_simops
+      name: "PTW-AES SIMOPS & Plot Plant Conflict Matrix"
+      description: "Simultaneous Operations (SIMOPS) spatial conflict detection on the AES Plot Plant map and CBO control authorization."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: permit
+          type: uuid
+        - field: conflict_status
+          type: string
+        - field: approved_by
+          type: uuid
+        - field: controls
+          type: text
+        - field: conflicting_permits
+          type: json
+        - field: scanned_at
+          type: timestamp
+
+    - collection: aes_ptw_csp
+      name: "PTW-AES Confined Space Permits (CSP) & Entry Point Condition Monitoring"
+      description: "Confined Space Permits (CSP) linked to PTW-AES with Entry Point Condition Monitoring inputs (O2, LEL, CO, H2S, NH3) per interval and validity tracking (actived/invalided) without hardware interlock."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: permit
+          type: uuid
+        - field: status
+          type: string
+        - field: approved_by
+          type: uuid
+        - field: evidence
+          type: text
+        - field: entry_details
+          type: text
+        - field: rescue_details
+          type: text
+        - field: lel_pct
+          type: float
+        - field: h2s_ppm
+          type: float
+        - field: nh3_ppm
+          type: float
+        - field: o2_pct
+          type: float
+        - field: co_ppm
+          type: float
+        - field: interval_hours
+          type: integer
+        - field: valid_end_at
+          type: timestamp
+        - field: condition_status
+          type: string
+
+    - collection: aes_ptw_hwp
+      name: "PTW-AES Hot Work Permits (HWP) & Entry Point Condition Monitoring"
+      description: "Hot Work Permits (HWP) linked to PTW-AES with Entry Point Condition Monitoring inputs (O2, LEL, CO, H2S, NH3) per interval and validity tracking (actived/invalided) without hardware interlock."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: permit
+          type: uuid
+        - field: status
+          type: string
+        - field: approved_by
+          type: uuid
+        - field: evidence
+          type: text
+        - field: lel_pct
+          type: float
+        - field: h2s_ppm
+          type: float
+        - field: nh3_ppm
+          type: float
+        - field: o2_pct
+          type: float
+        - field: co_ppm
+          type: float
+        - field: interval_hours
+          type: integer
+        - field: valid_end_at
+          type: timestamp
+        - field: condition_status
           type: string
 
   relations:
@@ -1675,6 +1791,331 @@ business_flows:
       - ["quarantine_ghg_quota_overage", "create_fuel_combustion_optimization_capa", "resolve"]
       - ["create_fuel_combustion_optimization_capa", "notify_ghg_quota_breach", "resolve"]
 
+  - key: aes-ptw-hazop-lopa-evaluation
+    name: "PTW-AES HAZOP Deviation & LOPA Independent Protection Layer (IPL) Risk Evaluation Flow"
+    description: "Governs PTW-AES HAZOP & LOPA hazard evaluation studies (hse_hazop_studies): verifies Facilitator and Approver Segregation of Duties (facilitator != approved_by) and LOPA Independent Protection Layer (IPL) evidence before approving HAZOP study for PTW-AES execution."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_hazop_studies
+      filter:
+        status:
+          _eq: review_submitted
+    nodes:
+      - key: read_hazop_lopa_study
+        name: "Read PTW-AES HAZOP & LOPA Study Dossier"
+        type: item-read
+        options:
+          collection: hse_hazop_studies
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - title
+              - identifier
+              - status
+              - facilitator
+              - approved_by
+              - approval_evidence
+        position_x: 1
+        position_y: 1
+
+      - key: verify_hazop_lopa_sod_and_evidence
+        name: "Verify Facilitator != Approver SoD & LOPA IPL Evidence"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_hazop_lopa_study:
+                  facilitator:
+                    _nnull: true
+              - read_hazop_lopa_study:
+                  approved_by:
+                    _nnull: true
+              - read_hazop_lopa_study:
+                  facilitator:
+                    _neq: "{{read_hazop_lopa_study.approved_by}}"
+              - read_hazop_lopa_study:
+                  approval_evidence:
+                    _nnull: true
+        position_x: 20
+        position_y: 1
+
+      - key: approve_hazop_lopa_study
+        name: "Approve PTW-AES HAZOP & LOPA Study"
+        type: item-update
+        options:
+          collection: hse_hazop_studies
+          key: "{{$trigger.key}}"
+          data:
+            status: approved
+        position_x: 40
+        position_y: 1
+
+      - key: notify_hazop_lopa_approved
+        name: "Notify PTW-AES Facilitator & CBO of Approved HAZOP/LOPA"
+        type: notification
+        options:
+          recipient: "{{read_hazop_lopa_study.facilitator}}"
+          subject: "PTW-AES HAZOP/LOPA Approved: {{read_hazop_lopa_study.identifier}}"
+          message: "HAZOP deviation analysis and LOPA Independent Protection Layer (IPL) credits verified with strict Maker-Checker SoD."
+        position_x: 60
+        position_y: 1
+
+      - key: reject_hazop_lopa_study
+        name: "Reject HAZOP/LOPA Due to SoD Collision or Missing IPL Evidence"
+        type: item-update
+        options:
+          collection: hse_hazop_studies
+          key: "{{$trigger.key}}"
+          data:
+            status: rejected_incomplete_lopa
+        position_x: 40
+        position_y: 15
+
+      - key: notify_hazop_lopa_rejected
+        name: "Alert Facilitator of HAZOP/LOPA Rejection"
+        type: notification
+        options:
+          recipient: "{{read_hazop_lopa_study.facilitator}}"
+          subject: "PTW-AES HAZOP/LOPA Rejected: {{read_hazop_lopa_study.identifier}}"
+          message: "HAZOP/LOPA study rejected due to Facilitator == Approver SoD violation or missing LOPA IPL verification evidence."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_hazop_lopa_study", "resolve"]
+      - ["read_hazop_lopa_study", "verify_hazop_lopa_sod_and_evidence", "resolve"]
+      - ["verify_hazop_lopa_sod_and_evidence", "approve_hazop_lopa_study", "resolve"]
+      - ["approve_hazop_lopa_study", "notify_hazop_lopa_approved", "resolve"]
+      - ["verify_hazop_lopa_sod_and_evidence", "reject_hazop_lopa_study", "reject"]
+      - ["reject_hazop_lopa_study", "notify_hazop_lopa_rejected", "resolve"]
+
+  - key: aes-ptw-simops-plot-plant-gate
+    name: "PTW-AES SIMOPS & Plot Plant Spatial Conflict Matrix Governance Flow"
+    description: "Evaluates Simultaneous Operations (SIMOPS) spatial conflicts on the AES Plot Plant map (aes_ptw_simops): requires Central Board Operator (CBO) control measures and signoff before clearing conflicting PTW-AES permits."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_ptw_simops
+      filter:
+        conflict_status:
+          _in:
+            - conflict
+            - pending_cbo_review
+    nodes:
+      - key: read_simops_dossier
+        name: "Read PTW-AES Plot Plant SIMOPS Conflict Record"
+        type: item-read
+        options:
+          collection: aes_ptw_simops
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - title
+              - permit
+              - conflict_status
+              - approved_by
+              - controls
+              - conflicting_permits
+        position_x: 1
+        position_y: 1
+
+      - key: verify_simops_cbo_controls
+        name: "Verify CBO Approval & SIMOPS Spatial Barrier Controls"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_simops_dossier:
+                  approved_by:
+                    _nnull: true
+              - read_simops_dossier:
+                  controls:
+                    _nnull: true
+        position_x: 20
+        position_y: 1
+
+      - key: clear_simops_to_controlled
+        name: "Update PTW-AES SIMOPS Status to Controlled"
+        type: item-update
+        options:
+          collection: aes_ptw_simops
+          key: "{{$trigger.key}}"
+          data:
+            conflict_status: controlled
+        position_x: 40
+        position_y: 1
+
+      - key: notify_simops_controlled
+        name: "Notify CBO & WPH of Cleared Plot Plant SIMOPS"
+        type: notification
+        options:
+          recipient: "{{read_simops_dossier.approved_by}}"
+          subject: "PTW-AES SIMOPS Controlled on Plot Plant: {{read_simops_dossier.title}}"
+          message: "Simultaneous Operations (SIMOPS) spatial conflict mitigated and approved by CBO on Plot Plant."
+        position_x: 60
+        position_y: 1
+
+      - key: hold_uncontrolled_simops
+        name: "Hold Conflicting Permit Pending Plot Plant SIMOPS Controls"
+        type: item-update
+        options:
+          collection: aes_ptw_simops
+          key: "{{$trigger.key}}"
+          data:
+            conflict_status: conflict_hold_unmitigated
+        position_x: 40
+        position_y: 15
+
+      - key: notify_simops_conflict_hold
+        name: "Alert CBO of Unmitigated Plot Plant SIMOPS Conflict"
+        type: notification
+        options:
+          recipient: "AES_CBO_SHIFT_SUPERVISOR"
+          subject: "PTW-AES PLOT PLANT SIMOPS HOLD: {{read_simops_dossier.title}}"
+          message: "Overlapping work radii detected on Plot Plant without approved SIMOPS barrier controls. Permit remains on hold."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_simops_dossier", "resolve"]
+      - ["read_simops_dossier", "verify_simops_cbo_controls", "resolve"]
+      - ["verify_simops_cbo_controls", "clear_simops_to_controlled", "resolve"]
+      - ["clear_simops_to_controlled", "notify_simops_controlled", "resolve"]
+      - ["verify_simops_cbo_controls", "hold_uncontrolled_simops", "reject"]
+      - ["hold_uncontrolled_simops", "notify_simops_conflict_hold", "resolve"]
+
+  - key: aes-ptw-csp-hwp-condition-monitoring
+    name: "PTW-AES CSP & HWP Entry Point Condition Monitoring (LEL / H2S / NH3 / O2 / CO) Validity Flow (No Hardware Interlock)"
+    description: "Evaluates periodic Condition Monitoring inputs (LEL, H2S, NH3, O2, CO) logged by the Gas Tester at Entry Points of Confined Space Permits (CSP - aes_ptw_csp) and Hot Work Permits (HWP - aes_ptw_hwp) linked to PTW-AES. Updates permit entry-point validity (condition_status: actived vs invalided and valid_end_at per interval) as an administrative permit validity control without any hardware trip interlock."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_ptw_csp
+        - aes_ptw_hwp
+      filter:
+        status:
+          _in:
+            - condition_monitoring_logged
+            - approved
+    nodes:
+      - key: read_csp_hwp_entry_condition
+        name: "Read PTW-AES CSP/HWP Entry Point Condition Monitoring Input"
+        type: item-read
+        options:
+          collection: aes_ptw_csp
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - title
+              - permit
+              - status
+              - approved_by
+              - evidence
+              - entry_details
+              - lel_pct
+              - h2s_ppm
+              - nh3_ppm
+              - o2_pct
+              - co_ppm
+              - interval_hours
+        position_x: 1
+        position_y: 1
+
+      - key: evaluate_entry_point_gas_condition
+        name: "Evaluate Entry Point Condition Monitoring Envelope (LEL < 10%, O2 19.5-23.5%, H2S < 10, NH3 < 25, CO < 25 — No Interlock)"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_csp_hwp_entry_condition:
+                  lel_pct:
+                    _lt: 10.0
+              - read_csp_hwp_entry_condition:
+                  o2_pct:
+                    _gte: 19.5
+              - read_csp_hwp_entry_condition:
+                  o2_pct:
+                    _lte: 23.5
+              - read_csp_hwp_entry_condition:
+                  h2s_ppm:
+                    _lt: 10.0
+              - read_csp_hwp_entry_condition:
+                  nh3_ppm:
+                    _lt: 25.0
+              - read_csp_hwp_entry_condition:
+                  co_ppm:
+                    _lt: 25.0
+        position_x: 20
+        position_y: 1
+
+      - key: extend_permit_condition_validity
+        name: "Update CSP/HWP Entry Point Condition Status to Actived (Extend validEndAt)"
+        type: item-update
+        options:
+          collection: aes_ptw_csp
+          key: "{{$trigger.key}}"
+          data:
+            status: approved
+            condition_status: actived
+            valid_end_at: "{{$NOW}}"
+        position_x: 40
+        position_y: 1
+
+      - key: notify_condition_monitoring_actived
+        name: "Notify Gas Tester & WPH of Entry Point Condition Validity Extension"
+        type: notification
+        options:
+          recipient: "{{read_csp_hwp_entry_condition.approved_by}}"
+          subject: "PTW-AES CSP/HWP Entry Point Condition Monitoring Actived: {{read_csp_hwp_entry_condition.title}}"
+          message: "Entry point Condition Monitoring readings (LEL={{read_csp_hwp_entry_condition.lel_pct}}%, O2={{read_csp_hwp_entry_condition.o2_pct}}%, H2S={{read_csp_hwp_entry_condition.h2s_ppm}} ppm, NH3={{read_csp_hwp_entry_condition.nh3_ppm}} ppm, CO={{read_csp_hwp_entry_condition.co_ppm}} ppm) are within safe limits. Permit validity extended for next interval (no hardware interlock)."
+        position_x: 60
+        position_y: 1
+
+      - key: mark_permit_condition_invalided
+        name: "Mark CSP/HWP Entry Point Condition Status Invalided (Advisory Permit Validity — No Interlock)"
+        type: item-update
+        options:
+          collection: aes_ptw_csp
+          key: "{{$trigger.key}}"
+          data:
+            condition_status: invalided
+        position_x: 40
+        position_y: 15
+
+      - key: notify_condition_monitoring_invalided
+        name: "Notify WPH, Watchman & CBO of Invalided Entry Point Condition Monitoring"
+        type: notification
+        options:
+          recipient: "{{read_csp_hwp_entry_condition.approved_by}}"
+          subject: "PTW-AES CSP/HWP Condition Monitoring Invalided: {{read_csp_hwp_entry_condition.title}}"
+          message: "Entry point Condition Monitoring input (LEL/H2S/NH3/O2/CO) exceeded administrative permit validity window on CSP/HWP. Permit validity marked invalided for ventilation & re-test by Gas Tester (no hardware trip interlock)."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_csp_hwp_entry_condition", "resolve"]
+      - ["read_csp_hwp_entry_condition", "evaluate_entry_point_gas_condition", "resolve"]
+      - ["evaluate_entry_point_gas_condition", "extend_permit_condition_validity", "resolve"]
+      - ["extend_permit_condition_validity", "notify_condition_monitoring_actived", "resolve"]
+      - ["evaluate_entry_point_gas_condition", "mark_permit_condition_invalided", "reject"]
+      - ["mark_permit_condition_invalided", "notify_condition_monitoring_invalided", "resolve"]
+
 rules:
   - rule_id: AES-LOTO-001
     name: "Zero Voltage & Earth Switch Requirement"
@@ -1728,7 +2169,7 @@ insights:
   - name: "Boiler & Turbine Availability & CEMS Emissions Dashboard"
     icon: "electric_bolt"
     color: "#C2185B"
-    note: "Generation performance, unit availability, and continuous stack environmental surveillance for AES Mong Duong Power Plant."
+    note: "[L3 • AES] Generation performance, unit availability, PTW-AES HAZOP/LOPA/SIMOPS, and continuous stack environmental surveillance for AES Mong Duong Power Plant."
     panels:
       - name: "Unit 1 CFB Boiler Availability (%)"
         type: metric
@@ -1800,7 +2241,7 @@ insights:
           limit: 6
         position_x: 1
         position_y: 13
-        width: 72
+        width: 36
         height: 16
         icon: "monitoring"
 
@@ -1817,11 +2258,39 @@ insights:
           sortDirection: desc
           displayTemplate: "LOTO #{{loto_no}}: {{equipment_tag}} ({{voltage_class_kv}} kV) — Status: {{status}}"
           limit: 6
-        position_x: 1
-        position_y: 29
-        width: 72
+        position_x: 37
+        position_y: 13
+        width: 36
         height: 16
         icon: "lock"
+
+      - name: "PTW-AES CFB Boiler & Ammonia FGD HAZOP Deviation Matrix"
+        type: grc-hazop
+        collection: hse_hazop_studies
+        options:
+          study_id: "HAZOP-AES-BLR01"
+          node_name: "CFB Boiler Steam Drum & Seawater FGD Ductwork"
+          standard: "IEC 61882 HAZOP"
+        position_x: 1
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "AccountTree"
+        color: "#FF6D00"
+
+      - name: "PTW-AES LOPA Independent Protection Layers (IPL) & SIMOPS Verification"
+        type: grc-lopa
+        collection: hse_hazop_studies
+        options:
+          study_id: "LOPA-AES-BLR01"
+          target_sil: "SIL-2"
+          standard: "IEC 61511 LOPA"
+        position_x: 37
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "Layers"
+        color: "#00E676"
 
       - name: "Boiler #1 Drum Level Dynamics & CIWH Water Hammer Monitor"
         type: grc-steam-boiler
@@ -1834,9 +2303,9 @@ insights:
           max_thermal_ramp_c_hr: 55.0
           standard: "ASME Section I / B31.1 / NFPA 85"
         position_x: 1
-        position_y: 45
-        width: 72
-        height: 24
+        position_y: 51
+        width: 36
+        height: 22
         icon: "hot_tub"
         color: "#FF9100"
 
@@ -1848,9 +2317,10 @@ insights:
           voltage_volts: 4160.0
           bolted_fault_ka: 25.0
           standard: "IEEE 1584-2018 / NFPA 70E"
-        position_x: 1
-        position_y: 69
-        width: 72
-        height: 24
+        position_x: 37
+        position_y: 51
+        width: 36
+        height: 22
         icon: "bolt"
         color: "#00E5FF"
+

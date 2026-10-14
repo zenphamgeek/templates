@@ -207,6 +207,48 @@ taxonomy_and_fields:
         - field: rejection_reason
           type: text
 
+    - collection: grc_actions
+      name: "Enterprise Corrective & Preventive Actions (CAPA)"
+      description: "Remediation workflows, root cause mitigation actions, and statutory mining safety directives."
+      fields:
+        - field: id
+          type: uuid
+        - field: status
+          type: string
+        - field: title
+          type: string
+        - field: priority
+          type: string
+        - field: source_module
+          type: string
+        - field: action_category
+          type: string
+        - field: description
+          type: string
+        - field: assigned_to
+          type: string
+
+    - collection: hse_tasks
+      name: "Operational Safety Tasks"
+      description: "Discrete actionable field instructions dispatched to underground and open-pit mining personnel."
+      fields:
+        - field: id
+          type: uuid
+        - field: status
+          type: string
+        - field: title
+          type: string
+        - field: task_title
+          type: string
+        - field: priority
+          type: string
+        - field: unit_tag
+          type: string
+        - field: assigned_to
+          type: string
+        - field: deadline_hours
+          type: integer
+
   relations:
     - collection: tkv_blasting_permits
       field: bench_sector
@@ -789,6 +831,391 @@ business_flows:
       - ["verify_environmental_and_fitness_envelope", "block_turnstile_shaft_descent", "reject"]
       - ["block_turnstile_shaft_descent", "alert_occupational_health_officer", "resolve"]
 
+  - key: tkv-spontaneous-combustion-co-goaf-gate
+    name: "Underground Coal Goaf Spontaneous Combustion CO & Inertization Gate"
+    description: "Monitors underground return airway carbon monoxide (<= 24.0 ppm) and air velocity (>= 1.5 m/s) for early detection of coal seam spontaneous heating; triggers nitrogen inertization task on breach."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_underground_ventilation
+    nodes:
+      - key: read_goaf_co_telemetry
+        name: "Read Underground Shaft CO & Air Velocity Telemetry"
+        type: item-read
+        options:
+          collection: tkv_underground_ventilation
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sensor_tag
+              - shaft_code
+              - co_ppm
+              - air_velocity_m_s
+              - ventilation_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_goaf_co_and_airflow
+        name: "Verify CO <= 24.0 ppm and Air Velocity >= 1.5 m/s"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_goaf_co_telemetry:
+                  co_ppm:
+                    _lte: 24.0
+              - read_goaf_co_telemetry:
+                  air_velocity_m_s:
+                    _gte: 1.5
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_goaf_thermal_stability
+        name: "Confirm Goaf Oxidation & Ventilation Within Safe Limits"
+        type: transform
+        options:
+          format: json
+          expression: "Underground CO concentration and air velocity indicate zero spontaneous combustion activity."
+        position_x: 50
+        position_y: 1
+
+      - key: escalate_goaf_co_inertization
+        name: "Set Ventilation Status to GOAF_CO_INERTIZATION_REQUIRED"
+        type: item-update
+        options:
+          collection: tkv_underground_ventilation
+          key: "{{$trigger.key}}"
+          data:
+            ventilation_status: GOAF_CO_INERTIZATION_REQUIRED
+        position_x: 50
+        position_y: 15
+
+      - key: create_goaf_inertization_task
+        name: "Create Nitrogen Foam Inertization & Seal Inspection Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "Inject N2 / Inhibitor Foam into Goaf Sector at Shaft {{read_goaf_co_telemetry.shaft_code}}"
+            task_title: "Inject N2 / Inhibitor Foam into Goaf Sector"
+            status: assigned
+            priority: critical
+            unit_tag: "GOAF-N2-SYSTEM"
+            assigned_to: "Mine_Rescue_Ventilation_Team"
+            deadline_hours: 1
+        position_x: 75
+        position_y: 15
+
+      - key: notify_ventilation_chief
+        name: "Alert Chief Ventilation Engineer of Spontaneous Heating Hazard"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.ventilation_chief_id}}"
+          subject: "GOAF CO ALERT: Inertization Required in Shaft {{read_goaf_co_telemetry.shaft_code}}"
+          message: "Sensor {{read_goaf_co_telemetry.sensor_tag}} recorded CO={{read_goaf_co_telemetry.co_ppm}} ppm or low air velocity ({{read_goaf_co_telemetry.air_velocity_m_s}} m/s). N2 inertization task dispatched."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_goaf_co_telemetry", "resolve"]
+      - ["read_goaf_co_telemetry", "verify_goaf_co_and_airflow", "resolve"]
+      - ["verify_goaf_co_and_airflow", "confirm_goaf_thermal_stability", "resolve"]
+      - ["verify_goaf_co_and_airflow", "escalate_goaf_co_inertization", "reject"]
+      - ["escalate_goaf_co_inertization", "create_goaf_inertization_task", "resolve"]
+      - ["create_goaf_inertization_task", "notify_ventilation_chief", "resolve"]
+
+  - key: tkv-blast-seismic-ppv-vibration-gate
+    name: "Open-Pit Blasting Peak Particle Velocity (PPV) Seismic Charge & Evacuation Gate"
+    description: "Verifies maximum explosive charge per delay/round (<= 2500.0 kg), perimeter sweep, and evacuation completion to prevent highwall bench seismic destabilization."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - tkv_blasting_permits
+      filter:
+        status:
+          _eq: blast_submitted
+    nodes:
+      - key: read_seismic_blast_permit
+        name: "Read Blasting Charge Weight & Perimeter Clearance"
+        type: item-read
+        options:
+          collection: tkv_blasting_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - bench_sector
+              - explosive_charge_kg
+              - perimeter_swept
+              - evacuation_completed
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_charge_and_clearance_limits
+        name: "Verify Charge <= 2500.0 kg, Perimeter Swept, and Evacuation Completed"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_seismic_blast_permit:
+                  explosive_charge_kg:
+                    _lte: 2500.0
+              - read_seismic_blast_permit:
+                  perimeter_swept:
+                    _eq: true
+              - read_seismic_blast_permit:
+                  evacuation_completed:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_seismic_blast_compliance
+        name: "Confirm Blast Seismic PPV & Clearance Envelope"
+        type: transform
+        options:
+          format: json
+          expression: "Explosive charge weight and evacuation clearance comply with highwall seismic PPV limits."
+        position_x: 50
+        position_y: 1
+
+      - key: hold_blast_for_seismic_limit
+        name: "Hold Blast Permit at blast_held_seismic_limit"
+        type: item-update
+        options:
+          collection: tkv_blasting_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: blast_held_seismic_limit
+            work_authorized: false
+            rejection_reason: "Explosive charge exceeds 2500.0 kg seismic PPV limit or perimeter evacuation incomplete."
+        position_x: 50
+        position_y: 15
+
+      - key: create_seismic_blast_capa
+        name: "Create Blasting Charge Redesign & Geotechnical CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Redesign Blast Charge Decking for Permit {{read_seismic_blast_permit.permit_no}} on Bench {{read_seismic_blast_permit.bench_sector}}"
+            status: open
+            priority: high
+            source_module: blast_seismic_gate
+            action_category: geotechnical_safety
+            description: "Blasting permit {{read_seismic_blast_permit.permit_no}} held due to explosive charge ({{read_seismic_blast_permit.explosive_charge_kg}} kg > 2500 kg) or incomplete clearance. Recalculate electronic delay decking."
+        position_x: 75
+        position_y: 15
+
+      - key: notify_geotech_blast_engineer
+        name: "Alert Geotechnical & Drilling-Blasting Engineer"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.geotech_engineer_id}}"
+          subject: "BLAST HELD (SEISMIC LIMIT): Permit {{read_seismic_blast_permit.permit_no}} on {{read_seismic_blast_permit.bench_sector}}"
+          message: "Blasting sequence held at blast_held_seismic_limit and CAPA created in grc_actions."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_seismic_blast_permit", "resolve"]
+      - ["read_seismic_blast_permit", "verify_charge_and_clearance_limits", "resolve"]
+      - ["verify_charge_and_clearance_limits", "confirm_seismic_blast_compliance", "resolve"]
+      - ["verify_charge_and_clearance_limits", "hold_blast_for_seismic_limit", "reject"]
+      - ["hold_blast_for_seismic_limit", "create_seismic_blast_capa", "resolve"]
+      - ["create_seismic_blast_capa", "notify_geotech_blast_engineer", "resolve"]
+
+  - key: tkv-methane-drainage-vacuum-recovery-gate
+    name: "Degassing Vacuum Plant CH4 Drainage Efficiency & Slope Alarm Gate"
+    description: "Monitors daily methane drainage efficiency (>= 65.0%) and active open-pit slope alarms (== 0). Generates a ventilation and geotechnical CAPA in grc_actions when degraded."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_mine_kpis
+    nodes:
+      - key: read_mine_drainage_kpis
+        name: "Read CH4 Drainage Efficiency & Slope Alarm KPIs"
+        type: item-read
+        options:
+          collection: tkv_mine_kpis
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - recorded_date
+              - raw_coal_output_mt
+              - ch4_drainage_efficiency_pct
+              - active_slope_alarms
+        position_x: 1
+        position_y: 1
+
+      - key: verify_ch4_drainage_and_slope_alarms
+        name: "Verify CH4 Drainage >= 65.0% and Active Slope Alarms == 0"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_mine_drainage_kpis:
+                  ch4_drainage_efficiency_pct:
+                    _gte: 65.0
+              - read_mine_drainage_kpis:
+                  active_slope_alarms:
+                    _eq: 0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_mine_safety_kpi_envelope
+        name: "Confirm Degassing Efficiency & Slope Stability KPIs"
+        type: transform
+        options:
+          format: json
+          expression: "Methane vacuum drainage recovery >= 65% and zero active pit slope radar alarms."
+        position_x: 50
+        position_y: 1
+
+      - key: create_ventilation_geotech_action
+        name: "Create Ventilation & Geotechnical Remediation Action"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Methane Vacuum Drainage & Slope Alarm Remediation ({{read_mine_drainage_kpis.recorded_date}})"
+            status: open
+            priority: critical
+            source_module: methane_drainage_kpi_gate
+            action_category: ventilation_geotech
+            description: "CH4 drainage efficiency ({{read_mine_drainage_kpis.ch4_drainage_efficiency_pct}}%) dropped below 65.0% or active slope alarms ({{read_mine_drainage_kpis.active_slope_alarms}}) > 0. Inspect borehole vacuum seals and bench prisms."
+        position_x: 50
+        position_y: 15
+
+      - key: notify_mine_technical_director
+        name: "Alert Mine Technical Director of KPI Breach"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.technical_director_id}}"
+          subject: "MINE SAFETY KPI BREACH: CH4 Drainage / Slope Alarm Action Created ({{read_mine_drainage_kpis.recorded_date}})"
+          message: "CH4 drainage recovery or slope radar alarm KPI breached safety threshold. Remediation CAPA created in grc_actions."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_mine_drainage_kpis", "resolve"]
+      - ["read_mine_drainage_kpis", "verify_ch4_drainage_and_slope_alarms", "resolve"]
+      - ["verify_ch4_drainage_and_slope_alarms", "confirm_mine_safety_kpi_envelope", "resolve"]
+      - ["verify_ch4_drainage_and_slope_alarms", "create_ventilation_geotech_action", "reject"]
+      - ["create_ventilation_geotech_action", "notify_mine_technical_director", "resolve"]
+
+  - key: tkv-tailings-phreatic-spillway-drawdown-flow
+    name: "Tailings Dam Phreatic Surface & Emergency Siphon Drawdown Flow"
+    description: "Verifies tailings dam phreatic surface level (<= 18.0 m) and pore water pressure (<= 150.0 kPa). On exceedance, sets safety_status to EMERGENCY_SIPHON_DRAWDOWN and creates an urgent HSE task."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_tailings_dam_sensors
+    nodes:
+      - key: read_tailings_phreatic_telemetry
+        name: "Read Tailings Dam Phreatic Level & Pore Pressure"
+        type: item-read
+        options:
+          collection: tkv_tailings_dam_sensors
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - piezometer_tag
+              - dam_sector
+              - phreatic_level_m
+              - pore_pressure_kpa
+              - safety_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_phreatic_and_pore_pressure
+        name: "Verify Phreatic Level <= 18.0 m and Pore Pressure <= 150.0 kPa"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_tailings_phreatic_telemetry:
+                  phreatic_level_m:
+                    _lte: 18.0
+              - read_tailings_phreatic_telemetry:
+                  pore_pressure_kpa:
+                    _lte: 150.0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_phreatic_drawdown_nominal
+        name: "Confirm Embankment Phreatic Surface Within Design Envelope"
+        type: transform
+        options:
+          format: json
+          expression: "Tailings dam phreatic level and pore pressure within GISTM structural safety limits."
+        position_x: 50
+        position_y: 1
+
+      - key: activate_emergency_siphon_drawdown
+        name: "Update Safety Status to EMERGENCY_SIPHON_DRAWDOWN"
+        type: item-update
+        options:
+          collection: tkv_tailings_dam_sensors
+          key: "{{$trigger.key}}"
+          data:
+            safety_status: EMERGENCY_SIPHON_DRAWDOWN
+        position_x: 50
+        position_y: 15
+
+      - key: create_siphon_drawdown_hse_task
+        name: "Create Urgent Decant Siphon & Spillway Drawdown HSE Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "Open Emergency Decant Siphons & Inspect Toe Drain at Sector {{read_tailings_phreatic_telemetry.dam_sector}}"
+            task_title: "Open Emergency Decant Siphons & Inspect Toe Drain"
+            status: assigned
+            priority: critical
+            unit_tag: "TSF-SIPHON-SPILLWAY"
+            assigned_to: "TSF_Hydro_Operations_Lead"
+            deadline_hours: 1
+        position_x: 75
+        position_y: 15
+
+      - key: notify_tsf_engineer_of_record
+        name: "Alert TSF Engineer of Record (EoR) of Siphon Drawdown"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.tsf_eor_id}}"
+          subject: "EMERGENCY SIPHON DRAWDOWN: TSF Sector {{read_tailings_phreatic_telemetry.dam_sector}}"
+          message: "Piezometer {{read_tailings_phreatic_telemetry.piezometer_tag}} phreatic level ({{read_tailings_phreatic_telemetry.phreatic_level_m}} m) or pore pressure ({{read_tailings_phreatic_telemetry.pore_pressure_kpa}} kPa) breached limit. Urgent drawdown task dispatched."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_tailings_phreatic_telemetry", "resolve"]
+      - ["read_tailings_phreatic_telemetry", "verify_phreatic_and_pore_pressure", "resolve"]
+      - ["verify_phreatic_and_pore_pressure", "confirm_phreatic_drawdown_nominal", "resolve"]
+      - ["verify_phreatic_and_pore_pressure", "activate_emergency_siphon_drawdown", "reject"]
+      - ["activate_emergency_siphon_drawdown", "create_siphon_drawdown_hse_task", "resolve"]
+      - ["create_siphon_drawdown_hse_task", "notify_tsf_engineer_of_record", "resolve"]
+
 rules:
   - rule_id: TKV-CH4-VENT-001
     name: "Underground Shaft CH4 Concentration Safety Ceiling"
@@ -806,11 +1233,43 @@ rules:
     enforcement: escalation
     action: "Trigger decant pump drawdown, notify dam safety engineer, and perform geotechnical inspection."
 
+  - rule_id: TKV-SLOPE-003
+    name: "Open-Pit Highwall Slope Radar Displacement Velocity Limit"
+    description: "Open-pit bench interferometric radar displacement velocity must not exceed 5.0 mm/day and cumulative deformation must stay below 50.0 mm."
+    severity: critical
+    condition: "displacement_velocity_mm_day <= 5.0 && cumulative_displacement_mm <= 50.0"
+    enforcement: escalation
+    action: "Halt haulage ramp traffic beneath affected bench, evacuate shovel crews, and conduct geotechnical slope stability audit."
+
+  - rule_id: TKV-FAN-004
+    name: "Main Shaft Exhaust Ventilation Fan Pressure & Vibration Envelope"
+    description: "Main surface exhaust fan differential static pressure must remain at least 1200 Pa with bearing vibration velocity <= 4.5 mm/s and airflow >= 80 m³/s."
+    severity: critical
+    condition: "main_fan_differential_pressure_pa >= 1200.0 && vibration_mm_s <= 4.5 && airflow_m3_s >= 80.0"
+    enforcement: strict_rejection
+    action: "Execute automatic damper switchover to standby ventilation fan and alert mine dispatch."
+
+  - rule_id: TKV-SUMP-005
+    name: "Underground Main Dewatering Sump & Hydrogeological Inrush Gate"
+    description: "Underground main drainage sump water level must remain <= 75% capacity with inflow <= 250 m³/h and advance probe water pressure <= 15 bar."
+    severity: critical
+    condition: "sump_level_pct <= 75.0 && water_inflow_m3_hr <= 250.0 && advance_probe_pressure_bar <= 15.0"
+    enforcement: escalation
+    action: "Cascade standby high-head turbine pumps, close watertight bulkhead doors, and alert drainage superintendent."
+
+  - rule_id: TKV-DESCENT-006
+    name: "Underground Miner Shift Turnstile Fit-for-Duty & Post-Blast Clearance"
+    description: "Shaft cage descent requires >= 30 minutes post-blast clearance, respirable dust <= 4.0 mg/m³, CO <= 20 ppm, NO2 <= 5 ppm, and zero blood alcohol."
+    severity: high
+    condition: "post_blast_clearance_minutes >= 30 && respirable_dust_mg_m3 <= 4.0 && gas_co_ppm <= 20.0 && breathalyzer_zero == true"
+    enforcement: strict_rejection
+    action: "Lock shaft entry turnstile, deny underground shift descent, and notify occupational health officer."
+
 insights:
   - name: "Mine Safety, Ventilation & Slope Stability Live Board"
     icon: "landscape"
     color: "#6D4C41"
-    note: "Underground airflow methane concentrations, surface pit slope displacement velocity, and tailings dam stability metrics for Vinacomin & Masan Mining."
+    note: "[L3 • TKV] Underground airflow methane concentrations, surface pit slope displacement velocity, and tailings dam stability metrics for Vinacomin & Masan Mining."
     panels:
       - name: "Daily Raw Coal Output (MT)"
         type: metric
@@ -882,7 +1341,7 @@ insights:
           limit: 6
         position_x: 1
         position_y: 13
-        width: 72
+        width: 36
         height: 16
         icon: "sensors"
 
@@ -899,8 +1358,62 @@ insights:
           sortDirection: desc
           displayTemplate: "Permit #{{permit_no}}: Bench {{bench_sector}} ({{explosive_charge_kg}} kg) — Status: {{status}}"
           limit: 6
-        position_x: 1
-        position_y: 29
-        width: 72
+        position_x: 37
+        position_y: 13
+        width: 36
         height: 16
         icon: "dangerous"
+
+      - name: "Underground Longwall Methane (CH4) & Goaf Fire Bow-Tie Barrier Monitor"
+        type: grc-bowtie
+        collection: tkv_underground_ventilation
+        options:
+          scenario_id: "BOWTIE-TKV-CH4-LONGWALL"
+          top_event: "Underground Longwall CH4 Accumulation (>1.0%) & Spontaneous Goaf Heating"
+        position_x: 1
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "security"
+        color: "#C62828"
+
+      - name: "Open-Pit Highwall Slope Radar & GISTM Tailings Dam Risk Matrix"
+        type: grc-risk-heatmap
+        collection: tkv_slope_stability
+        options:
+          matrix_dimension: "5x5"
+          vectors: "inherent_residual"
+        position_x: 37
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "grid_view"
+        color: "#EF6C00"
+
+      - name: "Main Shaft Exhaust Ventilation & Degassing Vacuum Plant Surge Monitor"
+        type: grc-compressor-surge
+        collection: tkv_fan_station_telemetry
+        options:
+          compressor_tag: "VENT-MAIN-MAOKHE"
+          service_description: "Mao Khe Underground Shaft Exhaust Fan & CH4 Vacuum Drainage"
+          process_gas_name: "Return Airway & Drained Coalbed Methane (CH4)"
+        position_x: 1
+        position_y: 51
+        width: 36
+        height: 22
+        icon: "cyclone"
+        color: "#00ACC1"
+
+      - name: "Longwall Shearer 6kV Feeder & Blasting Perimeter Isolation LOTO HUD"
+        type: grc-loto
+        collection: tkv_blasting_permits
+        options:
+          lockbox_id: "LBX-TKV-LW1-6KV"
+          isolation_tier: "high_voltage"
+        position_x: 37
+        position_y: 51
+        width: 36
+        height: 22
+        icon: "lock"
+        color: "#6D4C41"
+

@@ -212,6 +212,48 @@ taxonomy_and_fields:
         - field: rejection_reason
           type: text
 
+    - collection: grc_actions
+      name: "Enterprise Corrective & Preventive Actions (CAPA)"
+      description: "Remediation workflows, root cause mitigation actions, and statutory metallurgy safety directives."
+      fields:
+        - field: id
+          type: uuid
+        - field: status
+          type: string
+        - field: title
+          type: string
+        - field: priority
+          type: string
+        - field: source_module
+          type: string
+        - field: action_category
+          type: string
+        - field: description
+          type: string
+        - field: assigned_to
+          type: string
+
+    - collection: hse_tasks
+      name: "Operational Safety Tasks"
+      description: "Discrete actionable field instructions dispatched to steel complex operations and safety personnel."
+      fields:
+        - field: id
+          type: uuid
+        - field: status
+          type: string
+        - field: title
+          type: string
+        - field: task_title
+          type: string
+        - field: priority
+          type: string
+        - field: unit_tag
+          type: string
+        - field: assigned_to
+          type: string
+        - field: deadline_hours
+          type: integer
+
   relations:
     - collection: hpg_hot_metal_permits
       field: ladle_id
@@ -834,6 +876,382 @@ business_flows:
       - ["verify_dual_brake_and_ndt_integrity", "lockout_defective_crane", "reject"]
       - ["lockout_defective_crane", "alert_mechanical_maintenance_chief", "resolve"]
 
+  - key: hpg-bof-lance-water-leak-explosion-interlock
+    name: "BOF Converter Oxygen Lance & Stave Water Leak Explosion Interlock"
+    description: "Monitors cooling water delta-T (<= 8.0°C) and cooling water flow (>= 1200.0 m³/h) to prevent water leak contact with molten metal; trips cooling interlock and creates critical CAPA on exceedance."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hpg_blast_furnace_telemetry
+    nodes:
+      - key: read_lance_cooling_telemetry
+        name: "Read Cooling Water Delta-T & Flow Rate Telemetry"
+        type: item-read
+        options:
+          collection: hpg_blast_furnace_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - furnace_tag
+              - stave_cooling_delta_t_c
+              - cooling_water_flow_m3_hr
+              - cooling_interlock_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_lance_cooling_envelope
+        name: "Verify Cooling Delta-T <= 8.0°C and Water Flow >= 1200.0 m³/h"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_lance_cooling_telemetry:
+                  stave_cooling_delta_t_c:
+                    _lte: 8.0
+              - read_lance_cooling_telemetry:
+                  cooling_water_flow_m3_hr:
+                    _gte: 1200.0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_nominal_lance_cooling
+        name: "Confirm Nominal Lance & Stave Cooling Circuit Integrity"
+        type: transform
+        options:
+          format: json
+          expression: "Cooling water delta-T and flow rate within safe anti-explosion operating envelope."
+        position_x: 50
+        position_y: 1
+
+      - key: trip_lance_water_leak_interlock
+        name: "Trip Cooling Interlock to LANCE_WATER_LEAK_TRIP"
+        type: item-update
+        options:
+          collection: hpg_blast_furnace_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            cooling_interlock_status: LANCE_WATER_LEAK_TRIP
+        position_x: 50
+        position_y: 15
+
+      - key: create_lance_water_leak_capa
+        name: "Create Critical Water Leak Explosion Prevention CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Critical Cooling Water Leak Trip on {{read_lance_cooling_telemetry.furnace_tag}}"
+            status: open
+            priority: critical
+            source_module: bof_lance_interlock
+            action_category: explosion_prevention
+            description: "Cooling water delta-T ({{read_lance_cooling_telemetry.stave_cooling_delta_t_c}}°C) or flow rate ({{read_lance_cooling_telemetry.cooling_water_flow_m3_hr}} m³/h) breached safe threshold. Isolate water circuit immediately."
+        position_x: 75
+        position_y: 15
+
+      - key: notify_meltshop_superintendent
+        name: "Alert Meltshop Superintendent of Water Leak Trip"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.meltshop_superintendent_id}}"
+          subject: "EXPLOSION INTERLOCK TRIP: Lance/Stave Water Leak on {{read_lance_cooling_telemetry.furnace_tag}}"
+          message: "Cooling delta-T or water flow violated safety envelope. Interlock tripped to LANCE_WATER_LEAK_TRIP and critical CAPA created."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_lance_cooling_telemetry", "resolve"]
+      - ["read_lance_cooling_telemetry", "verify_lance_cooling_envelope", "resolve"]
+      - ["verify_lance_cooling_envelope", "confirm_nominal_lance_cooling", "resolve"]
+      - ["verify_lance_cooling_envelope", "trip_lance_water_leak_interlock", "reject"]
+      - ["trip_lance_water_leak_interlock", "create_lance_water_leak_capa", "resolve"]
+      - ["create_lance_water_leak_capa", "notify_meltshop_superintendent", "resolve"]
+
+  - key: hpg-trt-top-gas-pressure-recovery-gate
+    name: "Blast Furnace Top-Gas Pressure Recovery Turbine (TRT) Bypass Safety Gate"
+    description: "Monitors TRT gas enclosure atmospheric CO (<= 25.0 ppm) and O2 (>= 19.5%). On breach, escalates alarm_level to TRT_BYPASS_EMERGENCY and dispatches an urgent HSE task."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hpg_gas_monitoring
+    nodes:
+      - key: read_trt_gas_telemetry
+        name: "Read TRT Gas Enclosure CO & O2 Telemetry"
+        type: item-read
+        options:
+          collection: hpg_gas_monitoring
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sensor_tag
+              - zone_code
+              - co_instantaneous_ppm
+              - o2_percentage
+              - alarm_level
+        position_x: 1
+        position_y: 1
+
+      - key: verify_trt_atmospheric_envelope
+        name: "Verify CO <= 25.0 ppm and O2 >= 19.5%"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_trt_gas_telemetry:
+                  co_instantaneous_ppm:
+                    _lte: 25.0
+              - read_trt_gas_telemetry:
+                  o2_percentage:
+                    _gte: 19.5
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_trt_gas_recovery_nominal
+        name: "Confirm Nominal TRT Top-Gas Recovery Atmosphere"
+        type: transform
+        options:
+          format: json
+          expression: "TRT top-gas recovery enclosure CO and O2 levels within safe limits."
+        position_x: 50
+        position_y: 1
+
+      - key: trigger_trt_bypass_emergency
+        name: "Escalate Alarm Level to TRT_BYPASS_EMERGENCY"
+        type: item-update
+        options:
+          collection: hpg_gas_monitoring
+          key: "{{$trigger.key}}"
+          data:
+            alarm_level: TRT_BYPASS_EMERGENCY
+        position_x: 50
+        position_y: 15
+
+      - key: create_trt_emergency_task
+        name: "Create Urgent TRT Bypass & Nitrogen Purge HSE Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "Urgent TRT Bypass Valve Engagement & Enclosure N2 Purge at {{read_trt_gas_telemetry.zone_code}}"
+            task_title: "Urgent TRT Bypass Valve Engagement & Enclosure N2 Purge"
+            status: assigned
+            priority: critical
+            unit_tag: "TRT-BYPASS-SYS"
+            assigned_to: "TRT_Shift_Lead"
+            deadline_hours: 1
+        position_x: 75
+        position_y: 15
+
+      - key: notify_trt_dispatch_engineer
+        name: "Alert Energy & Gas Dispatch Engineer of TRT Bypass"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.gas_dispatch_engineer_id}}"
+          subject: "TRT BYPASS EMERGENCY: Gas Hazard at Sensor {{read_trt_gas_telemetry.sensor_tag}}"
+          message: "CO ({{read_trt_gas_telemetry.co_instantaneous_ppm}} ppm) or O2 ({{read_trt_gas_telemetry.o2_percentage}}%) breached safe limits in Zone {{read_trt_gas_telemetry.zone_code}}. TRT switched to emergency septum bypass."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_trt_gas_telemetry", "resolve"]
+      - ["read_trt_gas_telemetry", "verify_trt_atmospheric_envelope", "resolve"]
+      - ["verify_trt_atmospheric_envelope", "confirm_trt_gas_recovery_nominal", "resolve"]
+      - ["verify_trt_atmospheric_envelope", "trigger_trt_bypass_emergency", "reject"]
+      - ["trigger_trt_bypass_emergency", "create_trt_emergency_task", "resolve"]
+      - ["create_trt_emergency_task", "notify_trt_dispatch_engineer", "resolve"]
+
+  - key: hpg-ladle-refractory-campaign-relining-gate
+    name: "Molten Steel Ladle Refractory Campaign Life & Thermal Relining Gate"
+    description: "Verifies ladle refractory heat count (<= 95 heats) and shell surface temperature (<= 340.0°C). Quarantines ladle for relining and dispatches masonry task upon limit exceedance."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hpg_ladle_tracking
+    nodes:
+      - key: read_ladle_campaign_telemetry
+        name: "Read Ladle Refractory Heat Count & Shell Thermal Telemetry"
+        type: item-read
+        options:
+          collection: hpg_ladle_tracking
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - ladle_code
+              - refractory_heat_count
+              - shell_surface_temp_c
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_ladle_campaign_envelope
+        name: "Verify Refractory Heats <= 95 and Shell Temp <= 340.0°C"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_ladle_campaign_telemetry:
+                  refractory_heat_count:
+                    _lte: 95
+              - read_ladle_campaign_telemetry:
+                  shell_surface_temp_c:
+                    _lte: 340.0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_ladle_fit_for_teeming
+        name: "Confirm Ladle Fit for Next Teeming Heat"
+        type: transform
+        options:
+          format: json
+          expression: "Ladle refractory campaign life and shell temperature within safe circulation limits."
+        position_x: 50
+        position_y: 1
+
+      - key: quarantine_ladle_for_relining
+        name: "Quarantine Ladle for Refractory Relining"
+        type: item-update
+        options:
+          collection: hpg_ladle_tracking
+          key: "{{$trigger.key}}"
+          data:
+            status: quarantined_for_relining
+        position_x: 50
+        position_y: 15
+
+      - key: create_ladle_relining_hse_task
+        name: "Create Ladle Refractory Tear-Out & Relining Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "Quarantine & Reline Ladle {{read_ladle_campaign_telemetry.ladle_code}} (Heats: {{read_ladle_campaign_telemetry.refractory_heat_count}})"
+            task_title: "Quarantine & Reline Ladle Refractory Campaign"
+            status: assigned
+            priority: high
+            unit_tag: "LADLE-RELINE-BAY"
+            assigned_to: "Refractory_Masonry_Supervisor"
+            deadline_hours: 4
+        position_x: 75
+        position_y: 15
+
+      - key: notify_ladle_bay_supervisor
+        name: "Notify Ladle Bay & Refractory Engineering Supervisor"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.refractory_supervisor_id}}"
+          subject: "LADLE QUARANTINED: {{read_ladle_campaign_telemetry.ladle_code}} Routed for Relining"
+          message: "Ladle {{read_ladle_campaign_telemetry.ladle_code}} reached {{read_ladle_campaign_telemetry.refractory_heat_count}} heats or shell temp {{read_ladle_campaign_telemetry.shell_surface_temp_c}}°C. Status updated to quarantined_for_relining."
+        position_x: 100
+        position_y: 15
+    edges:
+      - ["$trigger", "read_ladle_campaign_telemetry", "resolve"]
+      - ["read_ladle_campaign_telemetry", "verify_ladle_campaign_envelope", "resolve"]
+      - ["verify_ladle_campaign_envelope", "confirm_ladle_fit_for_teeming", "resolve"]
+      - ["verify_ladle_campaign_envelope", "quarantine_ladle_for_relining", "reject"]
+      - ["quarantine_ladle_for_relining", "create_ladle_relining_hse_task", "resolve"]
+      - ["create_ladle_relining_hse_task", "notify_ladle_bay_supervisor", "resolve"]
+
+  - key: hpg-slag-granulation-h2s-so2-abatement-flow
+    name: "Blast Furnace Slag Granulation H2S/SO2 Abatement & Fuel Rate Optimization Flow"
+    description: "Evaluates daily blast furnace fuel rate (<= 490.0 kg/t) and cast house CO alarm frequency (<= 2). Creates an energy and emissions optimization CAPA in grc_actions when exceeded."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hpg_plant_kpis
+    nodes:
+      - key: read_plant_emissions_kpis
+        name: "Read Blast Furnace Fuel Rate & Gas Alarm KPIs"
+        type: item-read
+        options:
+          collection: hpg_plant_kpis
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - recorded_date
+              - crude_steel_output_mt
+              - bf_fuel_rate_kg_t
+              - overall_equipment_effectiveness
+              - co_alarms_count
+        position_x: 1
+        position_y: 1
+
+      - key: verify_fuel_rate_and_co_alarms
+        name: "Verify Fuel Rate <= 490.0 kg/t and CO Alarms <= 2"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_plant_emissions_kpis:
+                  bf_fuel_rate_kg_t:
+                    _lte: 490.0
+              - read_plant_emissions_kpis:
+                  co_alarms_count:
+                    _lte: 2
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_slag_abatement_compliance
+        name: "Confirm Fuel Efficiency & Slag Granulation Abatement Target"
+        type: transform
+        options:
+          format: json
+          expression: "Blast furnace fuel rate and gas abatement KPIs within target operational envelope."
+        position_x: 50
+        position_y: 1
+
+      - key: create_slag_emissions_optimization_capa
+        name: "Create Energy & H2S/SO2 Abatement Optimization Action"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "BF Fuel Rate & Slag Granulation Emissions Abatement Optimization ({{read_plant_emissions_kpis.recorded_date}})"
+            status: open
+            priority: high
+            source_module: slag_granulation_abatement
+            action_category: environmental_compliance
+            description: "BF fuel rate ({{read_plant_emissions_kpis.bf_fuel_rate_kg_t}} kg/t) exceeded 490.0 kg/t or CO alarms ({{read_plant_emissions_kpis.co_alarms_count}}) > 2. Tune pulverized coal injection and slag granulation condensing tower alkaline spray."
+        position_x: 50
+        position_y: 15
+
+      - key: notify_environmental_compliance_lead
+        name: "Notify Environmental & Energy Management Lead"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.env_manager_id}}"
+          subject: "EMISSIONS & FUEL KPI EXCEEDANCE: Action Created for {{read_plant_emissions_kpis.recorded_date}}"
+          message: "Blast furnace fuel rate or gas alarm count exceeded target threshold. Optimization CAPA logged in grc_actions."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_plant_emissions_kpis", "resolve"]
+      - ["read_plant_emissions_kpis", "verify_fuel_rate_and_co_alarms", "resolve"]
+      - ["verify_fuel_rate_and_co_alarms", "confirm_slag_abatement_compliance", "resolve"]
+      - ["verify_fuel_rate_and_co_alarms", "create_slag_emissions_optimization_capa", "reject"]
+      - ["create_slag_emissions_optimization_capa", "notify_environmental_compliance_lead", "resolve"]
+
 rules:
   - rule_id: HPG-BF-CO-001
     name: "Cast House CO Atmospheric Ceiling Limit"
@@ -851,11 +1269,43 @@ rules:
     enforcement: strict_rejection
     action: "Quarantine ladle, divert liquid steel to emergency pit, and log refractory inspection."
 
+  - rule_id: HPG-HEARTH-003
+    name: "Blast Furnace Hearth Sidewall & Stave Cooling Delta-T Limit"
+    description: "Blast furnace hearth carbon brick temperature must not exceed 380°C and stave cooling water delta-T must remain within 4.5°C to prevent hearth breakout."
+    severity: critical
+    condition: "hearth_sidewall_temp_c <= 380.0 && stave_cooling_delta_t_c <= 4.5"
+    enforcement: escalation
+    action: "Engage emergency stave booster pumps, reduce hot blast volume, and alert blast furnace superintendent."
+
+  - rule_id: HPG-TORPEDO-004
+    name: "Torpedo Ladle Trackway Zero-Moisture & Preheat Interlock"
+    description: "Torpedo ladle trackway pit must be completely dry (pit_water_detected == false) and refractory preheat must be at least 150°C prior to liquid iron pouring."
+    severity: critical
+    condition: "pit_water_detected == false && refractory_temp_c >= 150.0"
+    enforcement: strict_rejection
+    action: "Block torpedo car positioning, engage trackway derailer, and initiate pit sump drainage."
+
+  - rule_id: HPG-RAD-005
+    name: "Continuous Caster Mold Radioactive Source LOTO & Dose Limit"
+    description: "Co-60/Cs-137 mold level gauge shutter must be closed and padlocked with perimeter dose rate <= 2.5 µSv/h before maintenance entry."
+    severity: critical
+    condition: "shutter_closed == true && padlock_applied == true && perimeter_dose_rate_usv_hr <= 2.5"
+    enforcement: strict_rejection
+    action: "Deny mold maintenance permit, secure radiation exclusion perimeter, and notify Radiation Protection Officer."
+
+  - rule_id: HPG-CRANE-006
+    name: "Hot Metal Ladle Crane Dual-Brake & NDT Certification Gate"
+    description: "Hot metal ladle overhead cranes must pass primary and emergency hoist brake holding tests, wire rope magnetic NDT, and ultrasonic hook inspection per ASME B30.2."
+    severity: critical
+    condition: "primary_brake_holding == true && emergency_brake_holding == true && wire_rope_ndt_valid == true && hook_ut_valid == true"
+    enforcement: strict_rejection
+    action: "Lockout crane main hoist contactor, prohibit liquid metal lifting, and dispatch mechanical maintenance."
+
 insights:
   - name: "Blast Furnace, BOF Converter & Gas Safety Dashboard"
     icon: "precision_manufacturing"
-    color: "#D32F2F"
-    note: "Real-time surveillance of blast furnace iron tapping, converter gas alarms, and molten ladle fleet integrity for Hoa Phat Dung Quat Steel Complex."
+    color: "#D84315"
+    note: "[L3 • HPG] Real-time surveillance of blast furnace iron tapping, converter gas alarms, and molten ladle fleet integrity for Hoa Phat Dung Quat Steel Complex."
     panels:
       - name: "Crude Steel Daily Output (MT)"
         type: metric
@@ -927,7 +1377,7 @@ insights:
           limit: 6
         position_x: 1
         position_y: 13
-        width: 72
+        width: 36
         height: 16
         icon: "warning"
 
@@ -944,11 +1394,37 @@ insights:
           sortDirection: desc
           displayTemplate: "PTW #{{permit_no}}: Furnace {{blast_furnace_id}} TapHole {{tap_hole_no}} — Status: {{status}}"
           limit: 6
-        position_x: 1
-        position_y: 29
-        width: 72
+        position_x: 37
+        position_y: 13
+        width: 36
         height: 16
         icon: "assignment"
+
+      - name: "Molten Metal Water Entrapment & Hearth Breakout Bow-Tie Barrier Monitor"
+        type: grc-bowtie
+        collection: hpg_blast_furnace_telemetry
+        options:
+          scenario_id: "BOWTIE-HPG-BF-HEARTH"
+          top_event: "Blast Furnace Hearth Breakout & Torpedo Pit Water Steam Explosion"
+        position_x: 1
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "security"
+        color: "#D84315"
+
+      - name: "Cast House CO Gas, Ladle Shell Temp & CCM Radiation Risk Heatmap"
+        type: grc-risk-heatmap
+        collection: hpg_hot_metal_permits
+        options:
+          matrix_dimension: "5x5"
+          vectors: "inherent_residual"
+        position_x: 37
+        position_y: 29
+        width: 36
+        height: 22
+        icon: "grid_view"
+        color: "#C62828"
 
       - name: "CR-250 Ladle Crane LMI & Molten Steel Critical Lift Monitor"
         type: grc-crane-lmi
@@ -958,8 +1434,22 @@ insights:
           crane_model: "Liebherr LTM 1250-5.1"
           standard: "ASME B30.5 / EN 13000 / CIRIA C703"
         position_x: 1
-        position_y: 45
-        width: 72
-        height: 24
+        position_y: 51
+        width: 36
+        height: 22
         icon: "precision_manufacturing"
         color: "#FF9100"
+
+      - name: "Blast Furnace #1 Hearth Carbon Brick & Stave Cooling Thermal HUD"
+        type: grc-fired-heater
+        collection: hpg_blast_furnace_telemetry
+        options:
+          heater_tag: "BF1-HEARTH"
+          service_name: "Dung Quat Blast Furnace #1 (1080 m³) Hearth & Stave Cooling"
+        position_x: 37
+        position_y: 51
+        width: 36
+        height: 22
+        icon: "whatshot"
+        color: "#EF6C00"
+
