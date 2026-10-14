@@ -109,6 +109,110 @@ taxonomy_and_fields:
         - field: ebpr_cycle_time_hours
           type: float
 
+    - collection: dhg_gmp_deviations
+      name: "EU-GMP Quality Deviations & Containment Records"
+      description: "Critical, major, and minor production deviations, 5-Whys RCA, and sister batch containment holds."
+      fields:
+        - field: id
+          type: uuid
+        - field: deviation_no
+          type: string
+        - field: batch_id
+          type: uuid
+        - field: cleanroom_suite
+          type: string
+        - field: severity
+          type: string
+        - field: rca_completed
+          type: boolean
+        - field: root_cause_category
+          type: string
+        - field: sister_batches_hold_applied
+          type: boolean
+        - field: capa_assigned
+          type: boolean
+        - field: status
+          type: string
+        - field: rejection_reason
+          type: text
+
+    - collection: dhg_oos_investigations
+      name: "Out-of-Specification (OOS) Laboratory Dossiers"
+      description: "Phase I laboratory investigations, chromatography audit trail locks, and Phase II manufacturing escalation."
+      fields:
+        - field: id
+          type: uuid
+        - field: oos_no
+          type: string
+        - field: batch_no
+          type: string
+        - field: analytical_method
+          type: string
+        - field: lab_instrument_error_confirmed
+          type: boolean
+        - field: lab_retest_valid
+          type: boolean
+        - field: raw_chromatography_locked
+          type: boolean
+        - field: status
+          type: string
+        - field: qa_hold_placed
+          type: boolean
+        - field: rejection_reason
+          type: text
+
+    - collection: dhg_change_controls
+      name: "GMP Change Control & Qualification Packages"
+      description: "EU-GMP Annex 15 change controls, IQ/OQ/PQ validation protocol verification, and DAV variation gates."
+      fields:
+        - field: id
+          type: uuid
+        - field: change_control_no
+          type: string
+        - field: system_code
+          type: string
+        - field: classification
+          type: string
+        - field: risk_assessment_approved
+          type: boolean
+        - field: validation_protocol_complete
+          type: boolean
+        - field: dav_variation_approved_or_exempt
+          type: boolean
+        - field: qa_head_approved
+          type: boolean
+        - field: status
+          type: string
+        - field: rejection_reason
+          type: text
+
+    - collection: dhg_audit_trail_events
+      name: "21 CFR Part 11 ALCOA+ Audit Trail Events"
+      description: "Computerized system audit logs, NTP time synchronization, MFA signatures, and deletion protection."
+      fields:
+        - field: id
+          type: uuid
+        - field: system_id
+          type: string
+        - field: user_id
+          type: uuid
+        - field: action_type
+          type: string
+        - field: ntp_time_delta_sec
+          type: float
+        - field: signature_mfa_verified
+          type: boolean
+        - field: audit_trail_gaps_count
+          type: integer
+        - field: unauthorized_deletion_attempts
+          type: integer
+        - field: status
+          type: string
+        - field: alert_flag
+          type: string
+        - field: timestamp
+          type: timestamp
+
   relations:
     - collection: dhg_batch_production_records
       field: line_code
@@ -315,6 +419,417 @@ business_flows:
       - ["authorize_commercial_release", "notify_supply_chain", "resolve"]
       - ["verify_batch_sterility_and_cqas", "quarantine_batch", "reject"]
       - ["quarantine_batch", "alert_qa_investigation_team", "resolve"]
+
+  - key: dhg-gmp-deviation-rca-impact
+    name: "EU-GMP Quality Deviation Investigation & Sister-Batch Containment Flow"
+    description: "Evaluates production deviations. Enforces 5-Whys root cause analysis, CAPA assignment, and immediate containment hold on sister batches sharing identical raw materials."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - dhg_gmp_deviations
+      filter:
+        status:
+          _eq: deviation_logged
+    nodes:
+      - key: read_deviation_dossier
+        name: "Read Deviation Dossier & Impact Assessment"
+        type: item-read
+        options:
+          collection: dhg_gmp_deviations
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - deviation_no
+              - batch_id
+              - cleanroom_suite
+              - severity
+              - rca_completed
+              - sister_batches_hold_applied
+              - capa_assigned
+        position_x: 1
+        position_y: 1
+
+      - key: verify_rca_and_containment_safeguards
+        name: "Verify RCA Completed, Sister Batches Quarantined, and CAPA Assigned"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_deviation_dossier:
+                  rca_completed:
+                    _eq: true
+              - read_deviation_dossier:
+                  sister_batches_hold_applied:
+                    _eq: true
+              - read_deviation_dossier:
+                  capa_assigned:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: advance_to_qa_compliance_review
+        name: "Advance Deviation to QA Compliance Board Review"
+        type: item-update
+        options:
+          collection: dhg_gmp_deviations
+          key: "{{$trigger.key}}"
+          data:
+            status: deviation_under_qa_review
+        position_x: 50
+        position_y: 1
+
+      - key: notify_lead_qa_investigator
+        name: "Notify Lead QA Investigator of Completed Investigation"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qa_investigator_id}}"
+          subject: "Deviation Dossier Ready: {{read_deviation_dossier.deviation_no}}"
+          message: "Root cause determined, sister batches locked, and CAPA formulated. Ready for formal QA sign-off."
+        position_x: 75
+        position_y: 1
+
+      - key: reject_incomplete_investigation
+        name: "Reject Dossier Due to Missing RCA or Uncontained Batches"
+        type: item-update
+        options:
+          collection: dhg_gmp_deviations
+          key: "{{$trigger.key}}"
+          data:
+            status: deviation_rejected_incomplete_rca
+            rejection_reason: "Investigation rejected: 5-Whys root cause incomplete or sister batches not placed on containment hold."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_production_department_head
+        name: "Alert Production Department Head to Enforce 24h Containment"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.production_head_id}}"
+          subject: "DEVIATION REJECTED: Containment Breach on {{read_deviation_dossier.deviation_no}}"
+          message: "Immediate action required: place all potentially impacted sister lots on hold within 24 hours."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_deviation_dossier", "resolve"]
+      - ["read_deviation_dossier", "verify_rca_and_containment_safeguards", "resolve"]
+      - ["verify_rca_and_containment_safeguards", "advance_to_qa_compliance_review", "resolve"]
+      - ["advance_to_qa_compliance_review", "notify_lead_qa_investigator", "resolve"]
+      - ["verify_rca_and_containment_safeguards", "reject_incomplete_investigation", "reject"]
+      - ["reject_incomplete_investigation", "alert_production_department_head", "resolve"]
+
+  - key: dhg-oos-lab-manufacturing-investigation
+    name: "Out-of-Specification (OOS) Phase I Lab to Phase II Manufacturing Investigation"
+    description: "Governs laboratory OOS results. Locks raw chromatography audit trail to prevent testing into compliance, verifies lab error validity, or escalates to cross-functional Phase II manufacturing investigation."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - dhg_oos_investigations
+      filter:
+        status:
+          _eq: oos_flagged
+    nodes:
+      - key: read_oos_record
+        name: "Read OOS Investigation Dossier"
+        type: item-read
+        options:
+          collection: dhg_oos_investigations
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - oos_no
+              - batch_no
+              - analytical_method
+              - lab_instrument_error_confirmed
+              - lab_retest_valid
+              - raw_chromatography_locked
+        position_x: 1
+        position_y: 1
+
+      - key: verify_phase1_lab_error_criteria
+        name: "Verify Verified Lab Instrument Error and Raw Chromatography Locked"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_oos_record:
+                  lab_instrument_error_confirmed:
+                    _eq: true
+              - read_oos_record:
+                  lab_retest_valid:
+                    _eq: true
+              - read_oos_record:
+                  raw_chromatography_locked:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: resolve_as_lab_anomaly
+        name: "Resolve Phase I as Documented Laboratory Error"
+        type: item-update
+        options:
+          collection: dhg_oos_investigations
+          key: "{{$trigger.key}}"
+          data:
+            status: oos_phase1_lab_error_resolved
+        position_x: 50
+        position_y: 1
+
+      - key: notify_qc_manager
+        name: "Notify QC Manager of Authorized Retest"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.qc_manager_id}}"
+          subject: "OOS Phase I Resolved: Instrument Error on {{read_oos_record.oos_no}}"
+          message: "Lab error confirmed with audit trail locked. Formal retest authorized per SOP."
+        position_x: 75
+        position_y: 1
+
+      - key: escalate_to_manufacturing_investigation
+        name: "Escalate to Phase II Manufacturing Root Cause Investigation"
+        type: item-update
+        options:
+          collection: dhg_oos_investigations
+          key: "{{$trigger.key}}"
+          data:
+            status: oos_escalated_to_phase2_manufacturing
+            qa_hold_placed: true
+            rejection_reason: "No lab error identified: genuine batch non-conformance suspected. Cross-functional manufacturing investigation initiated."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_quality_director_phase2
+        name: "Alert Quality Director & Quarantine Affected Product Lots"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.quality_director_id}}"
+          subject: "OOS PHASE II ESCALATION: Batch {{read_oos_record.batch_no}} Quarantined"
+          message: "OOS {{read_oos_record.oos_no}} escalated to Phase II. Lab error ruled out; manufacturing investigation active."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_oos_record", "resolve"]
+      - ["read_oos_record", "verify_phase1_lab_error_criteria", "resolve"]
+      - ["verify_phase1_lab_error_criteria", "resolve_as_lab_anomaly", "resolve"]
+      - ["resolve_as_lab_anomaly", "notify_qc_manager", "resolve"]
+      - ["verify_phase1_lab_error_criteria", "escalate_to_manufacturing_investigation", "reject"]
+      - ["escalate_to_manufacturing_investigation", "alert_quality_director_phase2", "resolve"]
+
+  - key: dhg-change-control-revalidation-gate
+    name: "EU-GMP Change Control Qualification (IQ/OQ/PQ) & DAV Regulatory Gate"
+    description: "Evaluates GMP modifications. Verifies risk assessment, validation protocols (IQ/OQ/PQ), and Drug Administration of Vietnam (DAV) regulatory variation approvals prior to release."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - dhg_change_controls
+      filter:
+        status:
+          _eq: cc_submitted
+    nodes:
+      - key: read_change_control_record
+        name: "Read Change Control Dossier"
+        type: item-read
+        options:
+          collection: dhg_change_controls
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - change_control_no
+              - system_code
+              - classification
+              - risk_assessment_approved
+              - validation_protocol_complete
+              - dav_variation_approved_or_exempt
+              - qa_head_approved
+        position_x: 1
+        position_y: 1
+
+      - key: verify_qualification_and_regulatory_clearance
+        name: "Verify Risk Assessment, IQ/OQ/PQ Protocol, DAV Filing, and QA Approval"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_change_control_record:
+                  risk_assessment_approved:
+                    _eq: true
+              - read_change_control_record:
+                  validation_protocol_complete:
+                    _eq: true
+              - read_change_control_record:
+                  dav_variation_approved_or_exempt:
+                    _eq: true
+              - read_change_control_record:
+                  qa_head_approved:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_change_control_implementation
+        name: "Authorize GMP Change Implementation"
+        type: item-update
+        options:
+          collection: dhg_change_controls
+          key: "{{$trigger.key}}"
+          data:
+            status: change_control_approved
+        position_x: 50
+        position_y: 1
+
+      - key: notify_validation_and_engineering_lead
+        name: "Notify Validation Lead of Final Implementation Clearance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.validation_lead_id}}"
+          subject: "Change Control Authorized: {{read_change_control_record.change_control_no}} for {{read_change_control_record.system_code}}"
+          message: "IQ/OQ/PQ verified and DAV regulatory status compliant. Implementation authorized."
+        position_x: 75
+        position_y: 1
+
+      - key: hold_change_control_regulatory_gap
+        name: "Hold Change Control Due to Incomplete Validation or DAV Gap"
+        type: item-update
+        options:
+          collection: dhg_change_controls
+          key: "{{$trigger.key}}"
+          data:
+            status: change_control_held_regulatory_gap
+            rejection_reason: "Qualification incomplete: IQ/OQ/PQ protocols unverified or missing required DAV regulatory variation approval."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_regulatory_affairs_officer
+        name: "Alert Regulatory Affairs Officer & Validation Head"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.ra_officer_id}}"
+          subject: "CHANGE CONTROL HELD: Regulatory Gap on {{read_change_control_record.change_control_no}}"
+          message: "Change implementation locked: resolve pending validation protocols and DAV dossier."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_change_control_record", "resolve"]
+      - ["read_change_control_record", "verify_qualification_and_regulatory_clearance", "resolve"]
+      - ["verify_qualification_and_regulatory_clearance", "authorize_change_control_implementation", "resolve"]
+      - ["authorize_change_control_implementation", "notify_validation_and_engineering_lead", "resolve"]
+      - ["verify_qualification_and_regulatory_clearance", "hold_change_control_regulatory_gap", "reject"]
+      - ["hold_change_control_regulatory_gap", "alert_regulatory_affairs_officer", "resolve"]
+
+  - key: dhg-alcoa-audit-trail-review
+    name: "21 CFR Part 11 & EU-GMP Annex 11 ALCOA+ Audit Trail Review Gate"
+    description: "Evaluates computerized analytical and manufacturing execution system audit trails. Verifies NTP clock sync (<= 1.0s), authenticated MFA electronic signatures, and zero unauthorized record deletion attempts."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - dhg_audit_trail_events
+    nodes:
+      - key: read_audit_trail_entry
+        name: "Read Computerized System Audit Trail Event"
+        type: item-read
+        options:
+          collection: dhg_audit_trail_events
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - system_id
+              - user_id
+              - action_type
+              - ntp_time_delta_sec
+              - signature_mfa_verified
+              - audit_trail_gaps_count
+              - unauthorized_deletion_attempts
+        position_x: 1
+        position_y: 1
+
+      - key: verify_alcoa_data_integrity
+        name: "Verify NTP Delta <= 1.0s, MFA Signature, Zero Gaps, and Zero Deletions"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_audit_trail_entry:
+                  ntp_time_delta_sec:
+                    _lte: 1.0
+              - read_audit_trail_entry:
+                  signature_mfa_verified:
+                    _eq: true
+              - read_audit_trail_entry:
+                  audit_trail_gaps_count:
+                    _eq: 0
+              - read_audit_trail_entry:
+                  unauthorized_deletion_attempts:
+                    _eq: 0
+        position_x: 25
+        position_y: 1
+
+      - key: attest_alcoa_compliance
+        name: "Attest ALCOA+ Data Integrity Compliance"
+        type: item-update
+        options:
+          collection: dhg_audit_trail_events
+          key: "{{$trigger.key}}"
+          data:
+            status: alcoa_verified
+        position_x: 50
+        position_y: 1
+
+      - key: log_verified_integrity_hash
+        name: "Log Compliant Cryptographic Integrity State"
+        type: transform
+        options:
+          format: json
+          expression: "Audit trail record complies with 21 CFR Part 11 and EU-GMP Annex 11 ALCOA+ principles."
+        position_x: 75
+        position_y: 1
+
+      - key: flag_data_integrity_violation
+        name: "Flag Critical Data Integrity Violation & Lock System Connection"
+        type: item-update
+        options:
+          collection: dhg_audit_trail_events
+          key: "{{$trigger.key}}"
+          data:
+            status: DATA_INTEGRITY_VIOLATION_FLAGGED
+            alert_flag: ALCOA_BREACH_SUSPECTED
+        position_x: 50
+        position_y: 15
+
+      - key: broadcast_data_integrity_alarm
+        name: "Broadcast Critical Data Integrity Breach Alert"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.csv_lead_id}}"
+          subject: "ALCOA+ BREACH: Data Integrity Violation on System {{read_audit_trail_entry.system_id}}"
+          message: "Critical data integrity anomaly: NTP clock desynchronization, unverified electronic signature, or unauthorized record deletion attempt."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_audit_trail_entry", "resolve"]
+      - ["read_audit_trail_entry", "verify_alcoa_data_integrity", "resolve"]
+      - ["verify_alcoa_data_integrity", "attest_alcoa_compliance", "resolve"]
+      - ["attest_alcoa_compliance", "log_verified_integrity_hash", "resolve"]
+      - ["verify_alcoa_data_integrity", "flag_data_integrity_violation", "reject"]
+      - ["flag_data_integrity_violation", "broadcast_data_integrity_alarm", "resolve"]
 
 rules:
   - rule_id: DHG-GMP-DP-001

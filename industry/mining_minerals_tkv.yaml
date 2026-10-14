@@ -126,6 +126,87 @@ taxonomy_and_fields:
         - field: active_slope_alarms
           type: integer
 
+    - collection: tkv_fan_station_telemetry
+      name: "Main Shaft Exhaust Ventilation Fan Telemetry"
+      description: "Fan static depression, vibration velocity, airflow volume, and auto-switchover status."
+      fields:
+        - field: id
+          type: uuid
+        - field: station_code
+          type: string
+        - field: main_fan_status
+          type: string
+        - field: backup_fan_status
+          type: string
+        - field: main_fan_differential_pressure_pa
+          type: float
+        - field: vibration_mm_s
+          type: float
+        - field: airflow_m3_s
+          type: float
+        - field: auto_switchover_ready
+          type: boolean
+        - field: ventilation_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: tkv_dewatering_sump_telemetry
+      name: "Underground Dewatering Sump & Hydrogeological Telemetry"
+      description: "Main mine drainage sump levels, water inflow rates, turbine pump status, and probe pressures."
+      fields:
+        - field: id
+          type: uuid
+        - field: sump_tag
+          type: string
+        - field: shaft_level
+          type: string
+        - field: sump_level_pct
+          type: float
+        - field: water_inflow_m3_hr
+          type: float
+        - field: lead_pump_status
+          type: string
+        - field: lag_pump_ready
+          type: boolean
+        - field: advance_probe_pressure_bar
+          type: float
+        - field: dewatering_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: tkv_miner_shift_dispatches
+      name: "Miner Shift Descent & Fit-for-Duty Verifications"
+      description: "Turnstile descent permits verifying post-blast toxic gas clearance, dust levels, and breathalyzer."
+      fields:
+        - field: id
+          type: uuid
+        - field: dispatch_no
+          type: string
+        - field: miner_id
+          type: uuid
+        - field: shaft_code
+          type: string
+        - field: post_blast_clearance_minutes
+          type: integer
+        - field: respirable_dust_mg_m3
+          type: float
+        - field: gas_co_ppm
+          type: float
+        - field: gas_no2_ppm
+          type: float
+        - field: miner_fit_for_duty
+          type: boolean
+        - field: breathalyzer_zero
+          type: boolean
+        - field: status
+          type: string
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
   relations:
     - collection: tkv_blasting_permits
       field: bench_sector
@@ -337,6 +418,376 @@ business_flows:
       - ["authorize_blast_initiation", "notify_blasting_controller", "resolve"]
       - ["verify_blast_clearance_safeguards", "reject_blast_clearance", "reject"]
       - ["reject_blast_clearance", "alert_pit_superintendent", "resolve"]
+
+  - key: tkv-main-ventilation-fan-switchover
+    name: "Main Ventilation Fan Redundancy Switchover & Depression Interlock"
+    description: "Evaluates main shaft ventilation fan differential pressure (>= 1200 Pa), vibration (<= 4.5 mm/s), and airflow. Automatically engages standby backup fan if operating fan degrades."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_fan_station_telemetry
+    nodes:
+      - key: read_fan_telemetry
+        name: "Read Main Ventilation Fan Telemetry"
+        type: item-read
+        options:
+          collection: tkv_fan_station_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - station_code
+              - main_fan_status
+              - backup_fan_status
+              - main_fan_differential_pressure_pa
+              - vibration_mm_s
+              - airflow_m3_s
+              - auto_switchover_ready
+        position_x: 1
+        position_y: 1
+
+      - key: verify_fan_operating_envelope
+        name: "Verify Pressure >= 1200 Pa, Vibration <= 4.5 mm/s, Airflow >= 80 m³/s"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_fan_telemetry:
+                  main_fan_differential_pressure_pa:
+                    _gte: 1200.0
+              - read_fan_telemetry:
+                  vibration_mm_s:
+                    _lte: 4.5
+              - read_fan_telemetry:
+                  airflow_m3_s:
+                    _gte: 80.0
+        position_x: 25
+        position_y: 1
+
+      - key: confirm_nominal_fan_operation
+        name: "Confirm Nominal Shaft Exhaust Flow"
+        type: transform
+        options:
+          format: json
+          expression: "Main shaft ventilation fan operating within QCVN 01:2011/BCT nominal parameters."
+        position_x: 50
+        position_y: 1
+
+      - key: execute_backup_fan_switchover
+        name: "Execute Standby Fan Auto-Start & Reversal Damper Shift"
+        type: item-update
+        options:
+          collection: tkv_fan_station_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            main_fan_status: FAULT_TRIPPED
+            backup_fan_status: RUNNING_STANDBY_ENGAGED
+            ventilation_status: FAN_ALARM_STANDBY_ENGAGED
+        position_x: 50
+        position_y: 15
+
+      - key: alert_mine_dispatch_of_fan_trip
+        name: "Alert Mine Chief Engineer & Underground Shift Dispatcher"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.mine_dispatcher_id}}"
+          subject: "FAN FAULT: Standby Switchover Engaged at Station {{read_fan_telemetry.station_code}}"
+          message: "Main ventilation fan tripped (low pressure or excessive vibration). Standby fan engaged. Monitor face airflow."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_fan_telemetry", "resolve"]
+      - ["read_fan_telemetry", "verify_fan_operating_envelope", "resolve"]
+      - ["verify_fan_operating_envelope", "confirm_nominal_fan_operation", "resolve"]
+      - ["verify_fan_operating_envelope", "execute_backup_fan_switchover", "reject"]
+      - ["execute_backup_fan_switchover", "alert_mine_dispatch_of_fan_trip", "resolve"]
+
+  - key: tkv-tsf-pore-pressure-spillway-gate
+    name: "Tailings Storage Facility (TSF) Piezometer & Emergency Spillway Gate"
+    description: "Evaluates downstream dam embankment pore water pressure (<= 150 kPa), phreatic surface, and slope velocity. Triggers emergency spillway siphons if geotechnical stability limits are breached."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_tailings_dam_sensors
+    nodes:
+      - key: read_tsf_telemetry
+        name: "Read Piezometer & Dam Embankment Sensors"
+        type: item-read
+        options:
+          collection: tkv_tailings_dam_sensors
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - piezometer_tag
+              - dam_sector
+              - pore_pressure_kpa
+              - phreatic_level_m
+              - safety_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_tsf_stability_envelope
+        name: "Verify Pore Pressure <= 150 kPa and Phreatic Level <= 18m"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_tsf_telemetry:
+                  pore_pressure_kpa:
+                    _lte: 150.0
+              - read_tsf_telemetry:
+                  phreatic_level_m:
+                    _lte: 18.0
+        position_x: 25
+        position_y: 1
+
+      - key: log_nominal_dam_phreatic_line
+        name: "Log Nominal Embankment Phreatic Line"
+        type: transform
+        options:
+          format: json
+          expression: "Tailings dam pore pressure and phreatic surface line compliant with GISTM criteria."
+        position_x: 50
+        position_y: 1
+
+      - key: trigger_emergency_spillway_decant
+        name: "Trigger Emergency Decant Siphons & Declare Geotechnical Alert"
+        type: item-update
+        options:
+          collection: tkv_tailings_dam_sensors
+          key: "{{$trigger.key}}"
+          data:
+            safety_status: DAM_PIEZOMETRIC_EXCEEDANCE_ALERT
+        position_x: 50
+        position_y: 15
+
+      - key: broadcast_dam_geotechnical_alarm
+        name: "Broadcast GISTM High Priority Alarm to Dam Safety Engineer"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.dam_safety_engineer_id}}"
+          subject: "TSF GEOTECHNICAL ALERT: High Pore Pressure in Sector {{read_tsf_telemetry.dam_sector}}"
+          message: "Piezometer {{read_tsf_telemetry.piezometer_tag}} reached {{read_tsf_telemetry.pore_pressure_kpa}} kPa. Emergency spillway drawdown triggered."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_tsf_telemetry", "resolve"]
+      - ["read_tsf_telemetry", "verify_tsf_stability_envelope", "resolve"]
+      - ["verify_tsf_stability_envelope", "log_nominal_dam_phreatic_line", "resolve"]
+      - ["verify_tsf_stability_envelope", "trigger_emergency_spillway_decant", "reject"]
+      - ["trigger_emergency_spillway_decant", "broadcast_dam_geotechnical_alarm", "resolve"]
+
+  - key: tkv-underground-dewatering-pump-gate
+    name: "Underground Mine Main Dewatering Pump Redundancy & Inrush Gate"
+    description: "Surveils main shaft drainage sumps. If water level exceeds 75% or advance probe detects high pressure fissure (> 15 bar), automatically starts lag turbine pumps."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - tkv_dewatering_sump_telemetry
+    nodes:
+      - key: read_sump_telemetry
+        name: "Read Mine Sump Level & Advance Borehole Probe"
+        type: item-read
+        options:
+          collection: tkv_dewatering_sump_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - sump_tag
+              - shaft_level
+              - sump_level_pct
+              - water_inflow_m3_hr
+              - lead_pump_status
+              - lag_pump_ready
+              - advance_probe_pressure_bar
+        position_x: 1
+        position_y: 1
+
+      - key: verify_dewatering_headroom
+        name: "Verify Sump Level <= 75%, Inflow <= 250 m³/h, Probe Pressure <= 15 bar"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_sump_telemetry:
+                  sump_level_pct:
+                    _lte: 75.0
+              - read_sump_telemetry:
+                  water_inflow_m3_hr:
+                    _lte: 250.0
+              - read_sump_telemetry:
+                  advance_probe_pressure_bar:
+                    _lte: 15.0
+        position_x: 25
+        position_y: 1
+
+      - key: maintain_lead_pump_nominal
+        name: "Maintain Lead Pump Nominal Dewatering"
+        type: transform
+        options:
+          format: json
+          expression: "Mine shaft water inflow is within lead pump capacity; normal dewatering status."
+        position_x: 50
+        position_y: 1
+
+      - key: cascade_lag_pumps_emergency
+        name: "Cascade Auxiliary High-Volume Pumps & Flag High Water Alarm"
+        type: item-update
+        options:
+          collection: tkv_dewatering_sump_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            dewatering_status: SUMP_HIGH_WATER_ALARM
+        position_x: 50
+        position_y: 15
+
+      - key: notify_drainage_superintendent
+        name: "Alert Drainage Superintendent & Longwall Shift Lead"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.drainage_superintendent_id}}"
+          subject: "WATER INRUSH ALERT: Sump {{read_sump_telemetry.sump_tag}} on Level {{read_sump_telemetry.shaft_level}}"
+          message: "Water inflow ({{read_sump_telemetry.water_inflow_m3_hr}} m³/h) or probe pressure ({{read_sump_telemetry.advance_probe_pressure_bar}} bar) exceeded limit. Lag pumps cascaded."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_sump_telemetry", "resolve"]
+      - ["read_sump_telemetry", "verify_dewatering_headroom", "resolve"]
+      - ["verify_dewatering_headroom", "maintain_lead_pump_nominal", "resolve"]
+      - ["verify_dewatering_headroom", "cascade_lag_pumps_emergency", "reject"]
+      - ["cascade_lag_pumps_emergency", "notify_drainage_superintendent", "resolve"]
+
+  - key: tkv-respirable-dust-post-blast-health-gate
+    name: "Respirable Silica Dust, Post-Blast Toxic Gas & Miner Fit-for-Duty Descent Gate"
+    description: "Controls underground turnstile shaft descent. Verifies post-blast clearance time (>= 30 min), face dust (<= 4.0 mg/m³), CO <= 20 ppm, NO2 <= 5 ppm, and miner breathalyzer zero."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - tkv_miner_shift_dispatches
+      filter:
+        status:
+          _eq: descent_requested
+    nodes:
+      - key: read_miner_dispatch
+        name: "Read Shift Dispatch & Atmospheric Clearance Data"
+        type: item-read
+        options:
+          collection: tkv_miner_shift_dispatches
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - dispatch_no
+              - miner_id
+              - shaft_code
+              - post_blast_clearance_minutes
+              - respirable_dust_mg_m3
+              - gas_co_ppm
+              - gas_no2_ppm
+              - miner_fit_for_duty
+              - breathalyzer_zero
+        position_x: 1
+        position_y: 1
+
+      - key: verify_environmental_and_fitness_envelope
+        name: "Verify Blast Clearance >= 30m, Dust <= 4.0 mg/m³, CO <= 20, NO2 <= 5, and Breathalyzer Zero"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_miner_dispatch:
+                  post_blast_clearance_minutes:
+                    _gte: 30
+              - read_miner_dispatch:
+                  respirable_dust_mg_m3:
+                    _lte: 4.0
+              - read_miner_dispatch:
+                  gas_co_ppm:
+                    _lte: 20.0
+              - read_miner_dispatch:
+                  gas_no2_ppm:
+                    _lte: 5.0
+              - read_miner_dispatch:
+                  miner_fit_for_duty:
+                    _eq: true
+              - read_miner_dispatch:
+                  breathalyzer_zero:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_shaft_turnstile_descent
+        name: "Authorize Shaft Turnstile Descent"
+        type: item-update
+        options:
+          collection: tkv_miner_shift_dispatches
+          key: "{{$trigger.key}}"
+          data:
+            status: descent_authorized
+            work_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_lamp_room_controller
+        name: "Notify Lamp Room Controller of Clearance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.lamp_room_controller_id}}"
+          subject: "Descent Authorized: Dispatch {{read_miner_dispatch.dispatch_no}} for Shaft {{read_miner_dispatch.shaft_code}}"
+          message: "Post-blast toxic gases cleared, dust within limits, and miner fit-for-duty verified. Turnstile unlocked."
+        position_x: 75
+        position_y: 1
+
+      - key: block_turnstile_shaft_descent
+        name: "Block Shaft Turnstile Due to Health Hazard Violation"
+        type: item-update
+        options:
+          collection: tkv_miner_shift_dispatches
+          key: "{{$trigger.key}}"
+          data:
+            status: descent_blocked_health_hazard
+            work_authorized: false
+            rejection_reason: "Post-blast fumes remaining (CO/NO2), respirable dust exceeded, or failed breathalyzer test."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_occupational_health_officer
+        name: "Alert Occupational Health Officer of Descent Inhibit"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.health_officer_id}}"
+          subject: "DESCENT BLOCKED: Health Hazard Violation on Shaft {{read_miner_dispatch.shaft_code}}"
+          message: "Turnstile access prohibited for dispatch {{read_miner_dispatch.dispatch_no}}: toxic gas or unfit status."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_miner_dispatch", "resolve"]
+      - ["read_miner_dispatch", "verify_environmental_and_fitness_envelope", "resolve"]
+      - ["verify_environmental_and_fitness_envelope", "authorize_shaft_turnstile_descent", "resolve"]
+      - ["authorize_shaft_turnstile_descent", "notify_lamp_room_controller", "resolve"]
+      - ["verify_environmental_and_fitness_envelope", "block_turnstile_shaft_descent", "reject"]
+      - ["block_turnstile_shaft_descent", "alert_occupational_health_officer", "resolve"]
 
 rules:
   - rule_id: TKV-CH4-VENT-001

@@ -108,6 +108,110 @@ taxonomy_and_fields:
         - field: co_alarms_count
           type: integer
 
+    - collection: hpg_blast_furnace_telemetry
+      name: "Blast Furnace Hearth & Stave Cooling Telemetry"
+      description: "Hearth carbon brick thermocouples, cooling stave water flow, and delta-T interlock telemetry."
+      fields:
+        - field: id
+          type: uuid
+        - field: furnace_tag
+          type: string
+        - field: hearth_bottom_temp_c
+          type: float
+        - field: hearth_sidewall_temp_c
+          type: float
+        - field: stave_cooling_delta_t_c
+          type: float
+        - field: cooling_water_flow_m3_hr
+          type: float
+        - field: stave_booster_pump_status
+          type: string
+        - field: cooling_interlock_status
+          type: string
+        - field: timestamp
+          type: timestamp
+
+    - collection: hpg_torpedo_ladle_operations
+      name: "Torpedo Ladle Car & Trackway Operations"
+      description: "Moisture prevention, refractory preheat temperature, and trackway pit water entrapment tracking."
+      fields:
+        - field: id
+          type: uuid
+        - field: car_no
+          type: string
+        - field: track_pit_id
+          type: string
+        - field: refractory_temp_c
+          type: float
+        - field: pit_water_detected
+          type: boolean
+        - field: sump_sensor_status
+          type: string
+        - field: trackway_clearance
+          type: boolean
+        - field: status
+          type: string
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+        - field: timestamp
+          type: timestamp
+
+    - collection: hpg_radiation_source_permits
+      name: "CCM Mold Radiation Source LOTO Permits"
+      description: "Co-60 and Cs-137 radioactive level gauge shutter locking, dosimetry, and exclusion permits."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_no
+          type: string
+        - field: ccm_id
+          type: string
+        - field: source_isotope
+          type: string
+        - field: shutter_closed
+          type: boolean
+        - field: padlock_applied
+          type: boolean
+        - field: perimeter_dose_rate_usv_hr
+          type: float
+        - field: dosimeters_calibrated
+          type: boolean
+        - field: status
+          type: string
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
+    - collection: hpg_ladle_crane_inspections
+      name: "Ladle Crane ASME B30.2 Mechanical Safety Gates"
+      description: "Dual-brake hoist testing, ultrasonic hook testing, and wire rope electromagnetic NDT records."
+      fields:
+        - field: id
+          type: uuid
+        - field: inspection_no
+          type: string
+        - field: crane_tag
+          type: string
+        - field: primary_brake_holding
+          type: boolean
+        - field: emergency_brake_holding
+          type: boolean
+        - field: wire_rope_ndt_valid
+          type: boolean
+        - field: hook_ut_valid
+          type: boolean
+        - field: load_test_passed
+          type: boolean
+        - field: status
+          type: string
+        - field: work_authorized
+          type: boolean
+        - field: rejection_reason
+          type: text
+
   relations:
     - collection: hpg_hot_metal_permits
       field: ladle_id
@@ -327,6 +431,408 @@ business_flows:
       - ["check_co_critical_threshold", "trigger_evacuation_alarm", "resolve"]
       - ["trigger_evacuation_alarm", "broadcast_evacuation_alert", "resolve"]
       - ["check_co_critical_threshold", "log_normal_gas_state", "reject"]
+
+  - key: hpg-bf-hearth-lining-cooling-interlock
+    name: "Blast Furnace Hearth Lining & Stave Emergency Cooling Interlock"
+    description: "Monitors hearth carbon refractory thermocouples and cooling water delta-T. If hearth temperature exceeds 380°C or delta-T exceeds 4.5°C, automatically engages stave booster pumps and throttles furnace blast."
+    status: active
+    accountability: system
+    trigger:
+      type: event
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hpg_blast_furnace_telemetry
+    nodes:
+      - key: read_hearth_telemetry
+        name: "Read Blast Furnace Hearth & Stave Temperatures"
+        type: item-read
+        options:
+          collection: hpg_blast_furnace_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - furnace_tag
+              - hearth_bottom_temp_c
+              - hearth_sidewall_temp_c
+              - stave_cooling_delta_t_c
+              - stave_booster_pump_status
+              - cooling_interlock_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_hearth_thermal_limits
+        name: "Verify Hearth Temp <= 380°C and Stave Delta-T <= 4.5°C"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_hearth_telemetry:
+                  hearth_sidewall_temp_c:
+                    _lte: 380.0
+              - read_hearth_telemetry:
+                  stave_cooling_delta_t_c:
+                    _lte: 4.5
+        position_x: 25
+        position_y: 1
+
+      - key: maintain_nominal_cooling
+        name: "Maintain Nominal Stave Cooling State"
+        type: transform
+        options:
+          format: json
+          expression: "Blast furnace hearth thermal envelope within safe operational limits."
+        position_x: 50
+        position_y: 1
+
+      - key: trigger_emergency_stave_cooling
+        name: "Engage Emergency Stave Booster Pumps & Throttle Blast"
+        type: item-update
+        options:
+          collection: hpg_blast_furnace_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            stave_booster_pump_status: EMERGENCY_BOOSTER_ACTIVE
+            cooling_interlock_status: EMERGENCY_COOLING_ACTIVE
+        position_x: 50
+        position_y: 15
+
+      - key: alert_bf_superintendent
+        name: "Alert Blast Furnace Superintendent of Hearth Thermal Exceedance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.bf_superintendent_id}}"
+          subject: "HEARTH THERMAL TRIP: Blast Furnace {{read_hearth_telemetry.furnace_tag}}"
+          message: "Hearth sidewall temp ({{read_hearth_telemetry.hearth_sidewall_temp_c}}°C) or delta-T ({{read_hearth_telemetry.stave_cooling_delta_t_c}}°C) exceeded safe threshold. Emergency booster cooling engaged; throttle blast."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_hearth_telemetry", "resolve"]
+      - ["read_hearth_telemetry", "verify_hearth_thermal_limits", "resolve"]
+      - ["verify_hearth_thermal_limits", "maintain_nominal_cooling", "resolve"]
+      - ["verify_hearth_thermal_limits", "trigger_emergency_stave_cooling", "reject"]
+      - ["trigger_emergency_stave_cooling", "alert_bf_superintendent", "resolve"]
+
+  - key: hpg-torpedo-ladle-moisture-interlock
+    name: "Torpedo Ladle Moisture & Water Entrapment Anti-Explosion Interlock"
+    description: "Evaluates pit trackway drainage and torpedo car refractory preheat temperature (>= 150°C) before authorizing molten liquid iron transfer."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hpg_torpedo_ladle_operations
+      filter:
+        status:
+          _eq: transfer_pending
+    nodes:
+      - key: read_torpedo_status
+        name: "Read Torpedo Car & Trackway Sump Telemetry"
+        type: item-read
+        options:
+          collection: hpg_torpedo_ladle_operations
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - car_no
+              - track_pit_id
+              - refractory_temp_c
+              - pit_water_detected
+              - trackway_clearance
+        position_x: 1
+        position_y: 1
+
+      - key: verify_dry_envelope_and_clearance
+        name: "Verify Zero Water Detected and Refractory >= 150°C"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_torpedo_status:
+                  pit_water_detected:
+                    _eq: false
+              - read_torpedo_status:
+                  refractory_temp_c:
+                    _gte: 150.0
+              - read_torpedo_status:
+                  trackway_clearance:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_torpedo_transfer
+        name: "Authorize Torpedo Car Trackway Positioning"
+        type: item-update
+        options:
+          collection: hpg_torpedo_ladle_operations
+          key: "{{$trigger.key}}"
+          data:
+            status: transfer_authorized
+            work_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_yard_dispatcher
+        name: "Notify Rail Dispatcher of Safe Positioning"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.rail_dispatcher_id}}"
+          subject: "Torpedo Transfer Authorized: Car {{read_torpedo_status.car_no}} on Pit {{read_torpedo_status.track_pit_id}}"
+          message: "Trackway dry (zero moisture) and refractory preheated. Authorized for hot metal reception."
+        position_x: 75
+        position_y: 1
+
+      - key: reject_transfer_moisture_hazard
+        name: "Block Torpedo Car Due to Water Entrapment Explosion Hazard"
+        type: item-update
+        options:
+          collection: hpg_torpedo_ladle_operations
+          key: "{{$trigger.key}}"
+          data:
+            status: transfer_blocked_moisture_hazard
+            work_authorized: false
+            rejection_reason: "Catastrophic steam explosion hazard: water detected in trackway pit or refractory temperature < 150°C."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_cast_house_safety
+        name: "Alert Safety Officer & Engage Trackway Derailer"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.safety_officer_id}}"
+          subject: "EXPLOSION HAZARD TRIP: Torpedo Transfer Blocked for {{read_torpedo_status.car_no}}"
+          message: "Molten metal transfer aborted: pit moisture or cold refractory detected. Derailer engaged."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_torpedo_status", "resolve"]
+      - ["read_torpedo_status", "verify_dry_envelope_and_clearance", "resolve"]
+      - ["verify_dry_envelope_and_clearance", "authorize_torpedo_transfer", "resolve"]
+      - ["authorize_torpedo_transfer", "notify_yard_dispatcher", "resolve"]
+      - ["verify_dry_envelope_and_clearance", "reject_transfer_moisture_hazard", "reject"]
+      - ["reject_transfer_moisture_hazard", "alert_cast_house_safety", "resolve"]
+
+  - key: hpg-ccm-radioactive-source-loto
+    name: "Continuous Casting Mold Radioactive Source (Co-60/Cs-137) Shutter LOTO Gate"
+    description: "Verifies radioactive source shutter closure, mechanical lockbox padlock, mold perimeter dose rate (<= 2.5 µSv/h), and dosimeter calibration prior to mold maintenance."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hpg_radiation_source_permits
+      filter:
+        status:
+          _eq: source_loto_submitted
+    nodes:
+      - key: read_radiation_permit
+        name: "Read CCM Radiation Source Permit"
+        type: item-read
+        options:
+          collection: hpg_radiation_source_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - ccm_id
+              - source_isotope
+              - shutter_closed
+              - padlock_applied
+              - perimeter_dose_rate_usv_hr
+              - dosimeters_calibrated
+        position_x: 1
+        position_y: 1
+
+      - key: verify_radiation_safety_safeguards
+        name: "Verify Shutter Closed, Padlocked, Dose <= 2.5 µSv/h, and Dosimeters Calibrated"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_radiation_permit:
+                  shutter_closed:
+                    _eq: true
+              - read_radiation_permit:
+                  padlock_applied:
+                    _eq: true
+              - read_radiation_permit:
+                  perimeter_dose_rate_usv_hr:
+                    _lte: 2.5
+              - read_radiation_permit:
+                  dosimeters_calibrated:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: authorize_ccm_mold_access
+        name: "Authorize Mold Maintenance Access"
+        type: item-update
+        options:
+          collection: hpg_radiation_source_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: loto_radiation_cleared
+            work_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_ccm_foreman
+        name: "Notify CCM Maintenance Foreman of Radiation Clearance"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.ccm_foreman_id}}"
+          subject: "Radiation LOTO Authorized: Permit {{read_radiation_permit.permit_no}} on {{read_radiation_permit.ccm_id}}"
+          message: "Shutter locked and mold perimeter radiation verified <= 2.5 µSv/h. Authorized to proceed with mold servicing."
+        position_x: 75
+        position_y: 1
+
+      - key: reject_radiation_access
+        name: "Reject Mold Access Due to Radiation Hazard"
+        type: item-update
+        options:
+          collection: hpg_radiation_source_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: loto_rejected_radiation_hazard
+            work_authorized: false
+            rejection_reason: "Radioactive shutter open, padlock missing, or perimeter dose rate > 2.5 µSv/h."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_radiation_protection_officer
+        name: "Alert Radiation Protection Officer of Safety Breach"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.rpo_id}}"
+          subject: "RADIATION BREACH: Mold Access Blocked on {{read_radiation_permit.ccm_id}}"
+          message: "CCM mold maintenance access denied: radiation survey failed or source shutter unlatched. Secure exclusion zone."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_radiation_permit", "resolve"]
+      - ["read_radiation_permit", "verify_radiation_safety_safeguards", "resolve"]
+      - ["verify_radiation_safety_safeguards", "authorize_ccm_mold_access", "resolve"]
+      - ["authorize_ccm_mold_access", "notify_ccm_foreman", "resolve"]
+      - ["verify_radiation_safety_safeguards", "reject_radiation_access", "reject"]
+      - ["reject_radiation_access", "alert_radiation_protection_officer", "resolve"]
+
+  - key: hpg-ladle-crane-dual-brake-gate
+    name: "Hot Metal Ladle Crane ASME B30.2 NDT & Dual-Brake Hoist Safety Gate"
+    description: "Enforces dual mechanical hoist brake holding tests, wire rope magnetic flux NDT, and hook ultrasonic testing prior to certifying crane for molten steel transport."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hpg_ladle_crane_inspections
+      filter:
+        status:
+          _eq: inspection_submitted
+    nodes:
+      - key: read_crane_inspection
+        name: "Read Crane Inspection Dossier"
+        type: item-read
+        options:
+          collection: hpg_ladle_crane_inspections
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - inspection_no
+              - crane_tag
+              - primary_brake_holding
+              - emergency_brake_holding
+              - wire_rope_ndt_valid
+              - hook_ut_valid
+              - load_test_passed
+        position_x: 1
+        position_y: 1
+
+      - key: verify_dual_brake_and_ndt_integrity
+        name: "Verify Dual Brakes Holding, NDT Valid, and UT Hook Test Passed"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_crane_inspection:
+                  primary_brake_holding:
+                    _eq: true
+              - read_crane_inspection:
+                  emergency_brake_holding:
+                    _eq: true
+              - read_crane_inspection:
+                  wire_rope_ndt_valid:
+                    _eq: true
+              - read_crane_inspection:
+                  hook_ut_valid:
+                    _eq: true
+              - read_crane_inspection:
+                  load_test_passed:
+                    _eq: true
+        position_x: 25
+        position_y: 1
+
+      - key: certify_crane_for_hot_metal
+        name: "Certify Crane for Molten Steel Critical Lifts"
+        type: item-update
+        options:
+          collection: hpg_ladle_crane_inspections
+          key: "{{$trigger.key}}"
+          data:
+            status: crane_authorized_for_hot_metal
+            work_authorized: true
+        position_x: 50
+        position_y: 1
+
+      - key: notify_crane_operator
+        name: "Notify Crane Operator & Casting Floor Supervisor"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.crane_operator_id}}"
+          subject: "Crane Certified: {{read_crane_inspection.crane_tag}} Authorized for Hot Metal"
+          message: "Dual brakes, rope NDT, and hook UT verified per ASME B30.2. Heavy molten steel lift authorized."
+        position_x: 75
+        position_y: 1
+
+      - key: lockout_defective_crane
+        name: "Lockout Crane & Inhibit Main Hoist Contactor"
+        type: item-update
+        options:
+          collection: hpg_ladle_crane_inspections
+          key: "{{$trigger.key}}"
+          data:
+            status: crane_locked_out_mechanical_fault
+            work_authorized: false
+            rejection_reason: "Primary or emergency brake slippage, wire rope fatigue defect, or hook ultrasonic crack detected."
+        position_x: 50
+        position_y: 15
+
+      - key: alert_mechanical_maintenance_chief
+        name: "Alert Mechanical Maintenance Chief of Crane Defect"
+        type: notification
+        options:
+          recipient: "{{$trigger.payload.chief_mechanical_engineer_id}}"
+          subject: "CRANE DEFECT LOCKOUT: {{read_crane_inspection.crane_tag}} Failed Safety Inspection"
+          message: "Ladle crane blocked from service: hoist brake or NDT defect detected. Emergency repairs required."
+        position_x: 75
+        position_y: 15
+    edges:
+      - ["$trigger", "read_crane_inspection", "resolve"]
+      - ["read_crane_inspection", "verify_dual_brake_and_ndt_integrity", "resolve"]
+      - ["verify_dual_brake_and_ndt_integrity", "certify_crane_for_hot_metal", "resolve"]
+      - ["certify_crane_for_hot_metal", "notify_crane_operator", "resolve"]
+      - ["verify_dual_brake_and_ndt_integrity", "lockout_defective_crane", "reject"]
+      - ["lockout_defective_crane", "alert_mechanical_maintenance_chief", "resolve"]
 
 rules:
   - rule_id: HPG-BF-CO-001
