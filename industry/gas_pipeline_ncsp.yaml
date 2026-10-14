@@ -48,6 +48,8 @@ taxonomy_and_fields:
           type: timestamp
         - field: alert_flag
           type: string
+        - field: sensor_health
+          type: string
 
     - collection: ncsp_scada_valves
       name: "SCADA ESD & Station Valves"
@@ -112,10 +114,211 @@ taxonomy_and_fields:
         - field: h2s_content_ppm
           type: float
 
+    - collection: ncsp_ili_anomalies
+      name: "Intelligent Pigging ILI Corrosion Features"
+      description: "In-line inspection (MFL/UT) metal loss anomalies, defect dimensions, and ASME B31G calculations."
+      fields:
+        - field: id
+          type: uuid
+        - field: anomaly_code
+          type: string
+        - field: kilometer_post
+          type: float
+        - field: segment_name
+          type: string
+        - field: defect_depth_pct_wt
+          type: float
+        - field: defect_length_mm
+          type: float
+        - field: pipe_diameter_mm
+          type: float
+        - field: wall_thickness_mm
+          type: float
+        - field: smys_mpa
+          type: float
+        - field: maop_bar
+          type: float
+        - field: calculated_failure_pressure_bar
+          type: float
+        - field: erf_ratio
+          type: float
+        - field: repair_required
+          type: boolean
+        - field: status
+          type: string
+        - field: alert_flag
+          type: string
+
+    - collection: ncsp_maop_deratings
+      name: "Pipeline MAOP Derating & Safe Pressure Orders"
+      description: "Operational pressure reduction records and SCADA setpoint constraints driven by integrity evaluations."
+      fields:
+        - field: id
+          type: uuid
+        - field: segment_code
+          type: string
+        - field: kilometer_post
+          type: float
+        - field: design_maop_bar
+          type: float
+        - field: current_operating_pressure_bar
+          type: float
+        - field: calculated_safe_pressure_bar
+          type: float
+        - field: derated_maop_bar
+          type: float
+        - field: erf_ratio
+          type: float
+        - field: anomaly_id
+          type: uuid
+        - field: status
+          type: string
+        - field: scada_setpoint_updated
+          type: boolean
+        - field: derated_at
+          type: timestamp
+
+    - collection: ncsp_row_encroachments
+      name: "Right-of-Way (ROW) Corridor Encroachments"
+      description: "Unauthorized excavation, construction, and third-party activity within the 50m safety corridor."
+      fields:
+        - field: id
+          type: uuid
+        - field: incident_code
+          type: string
+        - field: kilometer_post
+          type: float
+        - field: gps_latitude
+          type: float
+        - field: gps_longitude
+          type: float
+        - field: distance_to_pipeline_m
+          type: float
+        - field: activity_type
+          type: string
+        - field: heavy_machinery_present
+          type: boolean
+        - field: patrol_officer_id
+          type: uuid
+        - field: status
+          type: string
+        - field: permits_suspended
+          type: boolean
+        - field: security_response_dispatched
+          type: boolean
+        - field: alert_flag
+          type: string
+
+    - collection: ncsp_esptw_permits
+      name: "Electronic Safety Permits to Work (eSPTW)"
+      description: "Multi-discipline permits for pipeline tie-in, hot tapping, and pig trap maintenance."
+      fields:
+        - field: id
+          type: uuid
+        - field: permit_no
+          type: string
+        - field: work_title
+          type: string
+        - field: location_kp
+          type: float
+        - field: hse_review_approved
+          type: boolean
+        - field: maintenance_review_approved
+          type: boolean
+        - field: safety_checklist_complete
+          type: boolean
+        - field: jha_attached
+          type: boolean
+        - field: requester_id
+          type: uuid
+        - field: status
+          type: string
+        - field: dual_review_cleared
+          type: boolean
+        - field: alert_flag
+          type: string
+        - field: dual_cleared_at
+          type: timestamp
+
+    - collection: ncsp_emergency_incidents
+      name: "Gas Trunkline Emergency Incidents"
+      description: "Loss of containment, sudden depressurization, and ESD trip coordination records."
+      fields:
+        - field: id
+          type: uuid
+        - field: incident_code
+          type: string
+        - field: segment_code
+          type: string
+        - field: kilometer_post
+          type: float
+        - field: incident_type
+          type: string
+        - field: gas_leak_rate_kg_s
+          type: float
+        - field: esd_trip_triggered
+          type: boolean
+        - field: flame_detected
+          type: boolean
+        - field: affected_jurisdiction
+          type: string
+        - field: status
+          type: string
+        - field: esd_isolated
+          type: boolean
+        - field: callout_tree_broadcasted
+          type: boolean
+        - field: alert_flag
+          type: string
+
+    - collection: grc_actions
+      name: "Enterprise Corrective & Preventive Actions (CAPA)"
+      description: "Emergency pipeline repair orders, engineering sleeves, and regulatory notifications."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: source_module
+          type: string
+        - field: action_category
+          type: string
+        - field: priority
+          type: string
+        - field: status
+          type: string
+        - field: description
+          type: string
+        - field: assigned_to
+          type: string
+
+    - collection: hse_tasks
+      name: "Operational Safety Tasks"
+      description: "Field investigation, NDT scan, and security intercept tasks dispatched to pipeline specialists."
+      fields:
+        - field: id
+          type: uuid
+        - field: task_title
+          type: string
+        - field: unit_tag
+          type: string
+        - field: priority
+          type: string
+        - field: status
+          type: string
+        - field: assigned_to
+          type: string
+        - field: deadline_hours
+          type: integer
+
   relations:
     - collection: ncsp_pigging_runs
       field: launcher_station_id
       related_collection: ncsp_scada_valves
+      type: m2o
+    - collection: ncsp_maop_deratings
+      field: anomaly_id
+      related_collection: ncsp_ili_anomalies
       type: m2o
 
   equipment_taxonomy:
@@ -142,9 +345,635 @@ taxonomy_and_fields:
             name: "Ba Ria Power Plant Tie-in Station"
 
 business_flows:
-  - key: ncsp-pigging-esd-verification
-    name: "Pipeline Pigging Operation & SCADA ESD Valve Status Verification Flow"
-    description: "Verifies barrel pressure equalization and SCADA ESD valve interlocks before authorizing intelligent pigging launch sequences in high-pressure offshore/onshore gas trunklines."
+  - key: ncsp-pim-b31g-failure-pressure
+    name: "Pipeline Integrity Management ASME B31G Corroded Pipe Failure Pressure Assessment Flow"
+    description: "Ingests in-line inspection (ILI) MFL/UT corrosion features, computes Folias factor M and failure pressure Pf per ASME B31G / RSTRENG, and evaluates Estimated Repair Factor (ERF)."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_ili_anomalies
+      filter:
+        status:
+          _eq: inspection_data_ingested
+    nodes:
+      - key: read_ili_corrosion_feature
+        name: "Read In-Line Inspection Corrosion Anomaly Parameters"
+        type: item-read
+        options:
+          collection: ncsp_ili_anomalies
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - anomaly_code
+              - kilometer_post
+              - segment_name
+              - defect_depth_pct_wt
+              - defect_length_mm
+              - pipe_diameter_mm
+              - wall_thickness_mm
+              - smys_mpa
+              - maop_bar
+              - calculated_failure_pressure_bar
+              - erf_ratio
+        position_x: 1
+        position_y: 1
+
+      - key: compute_b31g_defect_severity
+        name: "Evaluate ASME B31G / RSTRENG Critical Defect Limits"
+        type: condition
+        options:
+          filter:
+            _or:
+              - read_ili_corrosion_feature:
+                  defect_depth_pct_wt:
+                    _gte: 80.0
+              - read_ili_corrosion_feature:
+                  erf_ratio:
+                    _gt: 1.0
+        position_x: 20
+        position_y: 1
+
+      - key: create_emergency_pipeline_repair
+        name: "Create Urgent Pipeline Repair Work Order (Type-B Sleeve)"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Emergency Type-B Sleeve Repair - ASME B31G Anomaly at KP {{read_ili_corrosion_feature.kilometer_post}}"
+            source_module: pipeline_integrity_pim
+            action_category: asset_integrity
+            priority: critical
+            status: open
+            description: "ASME B31G critical corrosion feature detected at KP {{read_ili_corrosion_feature.kilometer_post}} (depth={{read_ili_corrosion_feature.defect_depth_pct_wt}}% WT, ERF={{read_ili_corrosion_feature.erf_ratio}}). Immediate repair sleeve required."
+        position_x: 40
+        position_y: 1
+
+      - key: create_ili_field_verification_task
+        name: "Dispatch Field NDT Ultrasonic Re-Verification Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            task_title: "NDT Ultrasonic Thickness Re-Verification at KP {{read_ili_corrosion_feature.kilometer_post}}"
+            unit_tag: "{{read_ili_corrosion_feature.segment_name}}"
+            priority: critical
+            status: assigned
+            assigned_to: "NDT_Inspection_Team"
+            deadline_hours: 24
+        position_x: 60
+        position_y: 1
+
+      - key: update_anomaly_critical_status
+        name: "Update Anomaly Record to Critical Flaw & Derating Pending"
+        type: item-update
+        options:
+          collection: ncsp_ili_anomalies
+          key: "{{$trigger.key}}"
+          data:
+            status: critical_flaw_derating_required
+            repair_required: true
+            alert_flag: asme_b31g_erf_exceeded
+        position_x: 80
+        position_y: 1
+
+      - key: notify_critical_b31g_alert
+        name: "Broadcast Critical Corrosion Alert to Integrity Superintendent"
+        type: notification
+        options:
+          recipient: "PIPELINE_INTEGRITY_SUPERINTENDENT"
+          subject: "CRITICAL PIM ALERT: ASME B31G Anomaly at KP {{read_ili_corrosion_feature.kilometer_post}}"
+          message: "Corrosion depth {{read_ili_corrosion_feature.defect_depth_pct_wt}}% WT or ERF {{read_ili_corrosion_feature.erf_ratio}} > 1.0 at KP {{read_ili_corrosion_feature.kilometer_post}}. Emergency sleeve repair created. Derating review initiated."
+        position_x: 100
+        position_y: 1
+
+      - key: update_anomaly_acceptable_status
+        name: "Record Anomaly as Monitored & Acceptable under B31G"
+        type: item-update
+        options:
+          collection: ncsp_ili_anomalies
+          key: "{{$trigger.key}}"
+          data:
+            status: monitored_acceptable_b31g
+            repair_required: false
+            alert_flag: null
+        position_x: 40
+        position_y: 15
+
+      - key: notify_b31g_acceptable
+        name: "Notify Corrosion Team of Acceptable ILI Anomaly"
+        type: notification
+        options:
+          recipient: "CORROSION_INTEGRITY_ENGINEER"
+          subject: "ASME B31G Evaluation Nominal: KP {{read_ili_corrosion_feature.kilometer_post}}"
+          message: "Defect depth {{read_ili_corrosion_feature.defect_depth_pct_wt}}% WT, ERF {{read_ili_corrosion_feature.erf_ratio}} <= 1.0 at KP {{read_ili_corrosion_feature.kilometer_post}}. Flaw is within ASME B31G allowable envelope. Routine monitoring logged."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_ili_corrosion_feature", "resolve"]
+      - ["read_ili_corrosion_feature", "compute_b31g_defect_severity", "resolve"]
+      - ["compute_b31g_defect_severity", "create_emergency_pipeline_repair", "resolve"]
+      - ["create_emergency_pipeline_repair", "create_ili_field_verification_task", "resolve"]
+      - ["create_ili_field_verification_task", "update_anomaly_critical_status", "resolve"]
+      - ["update_anomaly_critical_status", "notify_critical_b31g_alert", "resolve"]
+      - ["compute_b31g_defect_severity", "update_anomaly_acceptable_status", "reject"]
+      - ["update_anomaly_acceptable_status", "notify_b31g_acceptable", "resolve"]
+
+  - key: ncsp-pim-maop-derating-action
+    name: "Pipeline Automated MAOP Derating & Operating Pressure Reduction Flow"
+    description: "Automates Maximum Allowable Operating Pressure (MAOP) derating when Estimated Repair Factor (ERF) > 1.0, updating SCADA pressure setpoints to prevent rupture."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_maop_deratings
+      filter:
+        status:
+          _eq: derating_evaluation_requested
+    nodes:
+      - key: read_derating_parameters
+        name: "Read Pipeline Segment Operating & Safe Pressure Parameters"
+        type: item-read
+        options:
+          collection: ncsp_maop_deratings
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - segment_code
+              - kilometer_post
+              - design_maop_bar
+              - current_operating_pressure_bar
+              - calculated_safe_pressure_bar
+              - erf_ratio
+              - anomaly_id
+        position_x: 1
+        position_y: 1
+
+      - key: verify_erf_derating_threshold
+        name: "Verify ERF > 1.0 & Safe Pressure < Operating Pressure"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_derating_parameters:
+                  erf_ratio:
+                    _gt: 1.0
+              - read_derating_parameters:
+                  calculated_safe_pressure_bar:
+                    _lt: "{{read_derating_parameters.current_operating_pressure_bar}}"
+        position_x: 20
+        position_y: 1
+
+      - key: apply_scada_maop_reduction
+        name: "Apply Automated MAOP Derating in Pipeline Register"
+        type: item-update
+        options:
+          collection: ncsp_maop_deratings
+          key: "{{$trigger.key}}"
+          data:
+            status: maop_derated_active
+            derated_maop_bar: "{{read_derating_parameters.calculated_safe_pressure_bar}}"
+            derated_at: "{{$NOW}}"
+            scada_setpoint_updated: true
+        position_x: 40
+        position_y: 1
+
+      - key: create_scada_dispatch_directive
+        name: "Create SCADA Pressure Inhibit Directive"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "SCADA Pressure Inhibit Directive: Derate Segment {{read_derating_parameters.segment_code}} to {{read_derating_parameters.calculated_safe_pressure_bar}} bar"
+            source_module: scada_dispatch
+            action_category: operational_safety
+            priority: critical
+            status: active
+            description: "Mandatory MAOP reduction on {{read_derating_parameters.segment_code}} at KP {{read_derating_parameters.kilometer_post}}. Reduce intake pressure to safe limit {{read_derating_parameters.calculated_safe_pressure_bar}} bar."
+        position_x: 60
+        position_y: 1
+
+      - key: notify_gas_control_center_derating
+        name: "Alert Gas Dispatch Control Center of Immediate Derating"
+        type: notification
+        options:
+          recipient: "GAS_DISPATCH_CONTROL_CENTER"
+          subject: "MANDATORY MAOP DERATING: {{read_derating_parameters.segment_code}} Pressure Reduced"
+          message: "Operating pressure derated to {{read_derating_parameters.calculated_safe_pressure_bar}} bar (ERF={{read_derating_parameters.erf_ratio}}). Adjust compressor export and inlet choke valves immediately."
+        position_x: 80
+        position_y: 1
+
+      - key: maintain_baseline_maop
+        name: "Confirm Baseline MAOP Safe & Retain Normal Operating Envelope"
+        type: item-update
+        options:
+          collection: ncsp_maop_deratings
+          key: "{{$trigger.key}}"
+          data:
+            status: baseline_maop_confirmed
+            derated_maop_bar: "{{read_derating_parameters.design_maop_bar}}"
+            scada_setpoint_updated: false
+        position_x: 40
+        position_y: 15
+
+      - key: notify_derating_not_required
+        name: "Notify Dispatch that Baseline Operating Pressure is Safe"
+        type: notification
+        options:
+          recipient: "GAS_DISPATCH_CONTROL_CENTER"
+          subject: "MAOP Confirmed: {{read_derating_parameters.segment_code}} Operating Within Safe Envelope"
+          message: "Derating review completed: calculated safe pressure exceeds current operating pressure. Normal MAOP maintained."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_derating_parameters", "resolve"]
+      - ["read_derating_parameters", "verify_erf_derating_threshold", "resolve"]
+      - ["verify_erf_derating_threshold", "apply_scada_maop_reduction", "resolve"]
+      - ["apply_scada_maop_reduction", "create_scada_dispatch_directive", "resolve"]
+      - ["create_scada_dispatch_directive", "notify_gas_control_center_derating", "resolve"]
+      - ["verify_erf_derating_threshold", "maintain_baseline_maop", "reject"]
+      - ["maintain_baseline_maop", "notify_derating_not_required", "resolve"]
+
+  - key: ncsp-row-patrol-encroachment-interlock
+    name: "Pipeline Right-of-Way (ROW) Patrol Encroachment & Excavation Permit Interlock Flow"
+    description: "Monitors 39.5km onshore gas corridor for unauthorized heavy excavation or construction inside the 50m safety zone, automatically suspending nearby excavation permits."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_row_encroachments
+      filter:
+        status:
+          _eq: encroachment_detected
+    nodes:
+      - key: read_encroachment_incident
+        name: "Read Corridor Patrol Encroachment Incident"
+        type: item-read
+        options:
+          collection: ncsp_row_encroachments
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - incident_code
+              - kilometer_post
+              - gps_latitude
+              - gps_longitude
+              - distance_to_pipeline_m
+              - activity_type
+              - heavy_machinery_present
+              - patrol_officer_id
+        position_x: 1
+        position_y: 1
+
+      - key: check_corridor_safety_breach
+        name: "Verify Encroachment Inside 50m Corridor or Heavy Machinery"
+        type: condition
+        options:
+          filter:
+            _or:
+              - read_encroachment_incident:
+                  distance_to_pipeline_m:
+                    _lte: 50.0
+              - read_encroachment_incident:
+                  heavy_machinery_present:
+                    _eq: true
+        position_x: 20
+        position_y: 1
+
+      - key: suspend_nearby_excavation_permits
+        name: "Lock Out Excavation Permits in 500m Vicinity"
+        type: item-update
+        options:
+          collection: ncsp_row_encroachments
+          key: "{{$trigger.key}}"
+          data:
+            status: corridor_lockout_active
+            permits_suspended: true
+            security_response_dispatched: true
+            alert_flag: unauthorized_corridor_encroachment
+        position_x: 40
+        position_y: 1
+
+      - key: create_patrol_security_dispatch
+        name: "Dispatch Immediate Security Intercept Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            task_title: "Emergency Security Intercept: Encroachment at KP {{read_encroachment_incident.kilometer_post}}"
+            unit_tag: "ROW-ONSHORE-CORRIDOR"
+            priority: critical
+            status: dispatched
+            assigned_to: "Pipeline_Security_Patrol"
+            deadline_hours: 1
+        position_x: 60
+        position_y: 1
+
+      - key: broadcast_corridor_encroachment_alert
+        name: "Broadcast Emergency Encroachment Alert to Security Team"
+        type: notification
+        options:
+          recipient: "PIPELINE_SECURITY_CHIEF"
+          subject: "ROW ENCROACHMENT ALERT: Activity Detected at KP {{read_encroachment_incident.kilometer_post}}"
+          message: "Unauthorized excavation/machinery within {{read_encroachment_incident.distance_to_pipeline_m}}m of 26-inch trunkline (GPS: {{read_encroachment_incident.gps_latitude}}, {{read_encroachment_incident.gps_longitude}}). All permits within 500m suspended. Security dispatched."
+        position_x: 80
+        position_y: 1
+
+      - key: clear_encroachment_record
+        name: "Clear Encroachment as Verified Safe Distance"
+        type: item-update
+        options:
+          collection: ncsp_row_encroachments
+          key: "{{$trigger.key}}"
+          data:
+            status: inspected_non_encroaching
+            permits_suspended: false
+            alert_flag: null
+        position_x: 40
+        position_y: 15
+
+      - key: notify_patrol_clearance
+        name: "Notify Patrol Team of Safe Distance Verification"
+        type: notification
+        options:
+          recipient: "PIPELINE_SECURITY_CHIEF"
+          subject: "ROW Patrol Cleared: Activity Beyond Safety Zone at KP {{read_encroachment_incident.kilometer_post}}"
+          message: "Activity verified outside 50m corridor. No heavy machinery risk to pipeline. Normal patrol resumed."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_encroachment_incident", "resolve"]
+      - ["read_encroachment_incident", "check_corridor_safety_breach", "resolve"]
+      - ["check_corridor_safety_breach", "suspend_nearby_excavation_permits", "resolve"]
+      - ["suspend_nearby_excavation_permits", "create_patrol_security_dispatch", "resolve"]
+      - ["create_patrol_security_dispatch", "broadcast_corridor_encroachment_alert", "resolve"]
+      - ["check_corridor_safety_breach", "clear_encroachment_record", "reject"]
+      - ["clear_encroachment_record", "notify_patrol_clearance", "resolve"]
+
+  - key: ncsp-esptw-dual-review
+    name: "Electronic Safety Permit to Work (eSPTW) Concurrent Dual-Review Flow"
+    description: "Enforces concurrent independent endorsement from both HSE Safety and Maintenance Engineering before permit escalates to Area Authority (AA) and Shift Supervisor (SS)."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_esptw_permits
+      filter:
+        status:
+          _eq: dual_review_submitted
+    nodes:
+      - key: read_esptw_review_status
+        name: "Read eSPTW Permit & Multi-Discipline Review Status"
+        type: item-read
+        options:
+          collection: ncsp_esptw_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - work_title
+              - location_kp
+              - hse_review_approved
+              - maintenance_review_approved
+              - safety_checklist_complete
+              - jha_attached
+              - requester_id
+        position_x: 1
+        position_y: 1
+
+      - key: verify_concurrent_dual_endorsement
+        name: "Verify Unanimous HSE && Maintenance Dual Endorsement"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_esptw_review_status:
+                  hse_review_approved:
+                    _eq: true
+              - read_esptw_review_status:
+                  maintenance_review_approved:
+                    _eq: true
+              - read_esptw_review_status:
+                  safety_checklist_complete:
+                    _eq: true
+              - read_esptw_review_status:
+                  jha_attached:
+                    _eq: true
+        position_x: 20
+        position_y: 1
+
+      - key: approve_esptw_for_area_authority
+        name: "Approve Dual Endorsement & Escalate to Area Authority"
+        type: item-update
+        options:
+          collection: ncsp_esptw_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: area_authority_endorsement
+            dual_review_cleared: true
+            dual_cleared_at: "{{$NOW}}"
+        position_x: 40
+        position_y: 1
+
+      - key: notify_area_authority_esptw
+        name: "Notify Area Authority of Cleared Dual Endorsement"
+        type: notification
+        options:
+          recipient: "AREA_AUTHORITY_SUPERINTENDENT"
+          subject: "eSPTW Endorsed: Permit #{{read_esptw_review_status.permit_no}} Ready for Final Authorization"
+          message: "Concurrent approval granted by HSE and Maintenance. JHA verified. Permit ready for Area Authority signoff at KP {{read_esptw_review_status.location_kp}}."
+        position_x: 60
+        position_y: 1
+
+      - key: reject_esptw_deficiency
+        name: "Reject Permit Due to Missing or Disapproved Dual Review"
+        type: item-update
+        options:
+          collection: ncsp_esptw_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: returned_for_revision
+            dual_review_cleared: false
+            alert_flag: missing_concurrent_endorsement
+        position_x: 40
+        position_y: 15
+
+      - key: notify_esptw_rejection
+        name: "Alert Requester of Dual Review Rejection"
+        type: notification
+        options:
+          recipient: "{{read_esptw_review_status.requester_id}}"
+          subject: "eSPTW Revision Required: Permit #{{read_esptw_review_status.permit_no}}"
+          message: "eSPTW returned. Concurrent signoff from BOTH HSE and Maintenance required before Area Authority review."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_esptw_review_status", "resolve"]
+      - ["read_esptw_review_status", "verify_concurrent_dual_endorsement", "resolve"]
+      - ["verify_concurrent_dual_endorsement", "approve_esptw_for_area_authority", "resolve"]
+      - ["approve_esptw_for_area_authority", "notify_area_authority_esptw", "resolve"]
+      - ["verify_concurrent_dual_endorsement", "reject_esptw_deficiency", "reject"]
+      - ["reject_esptw_deficiency", "notify_esptw_rejection", "resolve"]
+
+  - key: ncsp-emergency-response-coordination
+    name: "Inter-Provincial Gas Emergency Response & SCADA ESD Valve Trip Coordination Flow"
+    description: "Coordinates inter-provincial emergency communications (Dinh Co, Phu My, Ba Ria, Fire Police PC07) and trips SCADA Emergency Shutdown (ESD) valves on gas release."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_emergency_incidents
+      filter:
+        status:
+          _eq: emergency_declared
+    nodes:
+      - key: read_emergency_incident
+        name: "Read Gas Trunkline Emergency Incident Parameters"
+        type: item-read
+        options:
+          collection: ncsp_emergency_incidents
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - incident_code
+              - segment_code
+              - kilometer_post
+              - incident_type
+              - gas_leak_rate_kg_s
+              - esd_trip_triggered
+              - flame_detected
+              - affected_jurisdiction
+        position_x: 1
+        position_y: 1
+
+      - key: evaluate_tier_emergency_criteria
+        name: "Evaluate Major Incident Thresholds (Leak >= 5kg/s or ESD)"
+        type: condition
+        options:
+          filter:
+            _or:
+              - read_emergency_incident:
+                  esd_trip_triggered:
+                    _eq: true
+              - read_emergency_incident:
+                  gas_leak_rate_kg_s:
+                    _gte: 5.0
+              - read_emergency_incident:
+                  flame_detected:
+                    _eq: true
+        position_x: 20
+        position_y: 1
+
+      - key: trigger_scada_esd_valve_isolation
+        name: "Trigger SCADA Emergency Line-Break Valve Isolation"
+        type: item-update
+        options:
+          collection: ncsp_scada_valves
+          key: "{{read_emergency_incident.segment_code}}"
+          data:
+            esd_valves_armed: true
+            kicker_valve_open: false
+        position_x: 40
+        position_y: 1
+
+      - key: create_interprovincial_crisis_dossier
+        name: "Create Tier-1 Crisis Management Dossier in GRC"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Inter-Provincial Tier-1 Gas Emergency Response - {{read_emergency_incident.segment_code}} KP {{read_emergency_incident.kilometer_post}}"
+            source_module: emergency_crisis_management
+            action_category: life_safety_emergency
+            priority: critical
+            status: active
+            description: "Major gas release or ESD event at KP {{read_emergency_incident.kilometer_post}} (leak rate={{read_emergency_incident.gas_leak_rate_kg_s}} kg/s). Inter-provincial callout initiated."
+        position_x: 60
+        position_y: 1
+
+      - key: update_incident_escalation_status
+        name: "Update Incident Record with Active Crisis Protocol"
+        type: item-update
+        options:
+          collection: ncsp_emergency_incidents
+          key: "{{$trigger.key}}"
+          data:
+            status: emergency_coordinated_active
+            esd_isolated: true
+            callout_tree_broadcasted: true
+        position_x: 80
+        position_y: 1
+
+      - key: broadcast_interprovincial_callout_tree
+        name: "Broadcast Emergency Callout to Plant Operators & Authorities"
+        type: notification
+        options:
+          recipient: "CRISIS_MANAGEMENT_COMMAND"
+          subject: "INTER-PROVINCIAL EMERGENCY BROADCAST: Gas Release on {{read_emergency_incident.segment_code}}"
+          message: "CRITICAL INCIDENT at KP {{read_emergency_incident.kilometer_post}}. SCADA mainline valves closed. Callout dispatched to Dinh Co GPP, Phu My GDC, Ba Ria Power, and Fire Police PC07."
+        position_x: 100
+        position_y: 1
+
+      - key: log_minor_anomaly
+        name: "Log Localized Non-Emergency Operational Anomaly"
+        type: item-update
+        options:
+          collection: ncsp_emergency_incidents
+          key: "{{$trigger.key}}"
+          data:
+            status: localized_anomaly_standby
+            callout_tree_broadcasted: false
+            alert_flag: minor_operational_fluctuation
+        position_x: 40
+        position_y: 15
+
+      - key: notify_field_technician_dispatch
+        name: "Dispatch Field Technician for Localized Inspection"
+        type: notification
+        options:
+          recipient: "FIELD_OPERATION_TECHNICIAN"
+          subject: "Operational Standby: Localized Telemetry Anomaly on {{read_emergency_incident.segment_code}}"
+          message: "Minor operational fluctuation logged at KP {{read_emergency_incident.kilometer_post}}. Leak rate < 5.0 kg/s and no flame detected. Local technician dispatched for site verification."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_emergency_incident", "resolve"]
+      - ["read_emergency_incident", "evaluate_tier_emergency_criteria", "resolve"]
+      - ["evaluate_tier_emergency_criteria", "trigger_scada_esd_valve_isolation", "resolve"]
+      - ["trigger_scada_esd_valve_isolation", "create_interprovincial_crisis_dossier", "resolve"]
+      - ["create_interprovincial_crisis_dossier", "update_incident_escalation_status", "resolve"]
+      - ["update_incident_escalation_status", "broadcast_interprovincial_callout_tree", "resolve"]
+      - ["evaluate_tier_emergency_criteria", "log_minor_anomaly", "reject"]
+      - ["log_minor_anomaly", "notify_field_technician_dispatch", "resolve"]
+
+  - key: ncsp-scada-integrity-monitor
+    name: "Real-Time Pig Trap & Cathodic Protection Pipeline Integrity Monitor Flow"
+    description: "Monitors pig launcher barrel pressure equalization, SCADA ESD valves, and subsea CP potentials (-850mV to -1200mV) before clearing pipeline operations."
     status: active
     accountability: activity
     trigger:
@@ -157,8 +986,8 @@ business_flows:
         status:
           _eq: launch_sequence_initiated
     nodes:
-      - key: read_pigging_run
-        name: "Read Pigging Run Parameters"
+      - key: read_pipeline_sensor_telemetry
+        name: "Read Pigging Run & Station Sensor Telemetry"
         type: item-read
         options:
           collection: ncsp_pigging_runs
@@ -167,18 +996,17 @@ business_flows:
             fields:
               - id
               - run_code
-              - pipeline_segment
               - launcher_station_id
-              - tool_type
+              - pipeline_segment
         position_x: 1
         position_y: 1
 
-      - key: read_scada_valves
-        name: "Read SCADA ESD & Barrel Valves"
+      - key: read_station_scada_valves
+        name: "Read SCADA ESD & Launcher Barrel Valve Telemetry"
         type: item-read
         options:
           collection: ncsp_scada_valves
-          key: "{{read_pigging_run.launcher_station_id}}"
+          key: "{{read_pipeline_sensor_telemetry.launcher_station_id}}"
           query:
             fields:
               - id
@@ -192,29 +1020,50 @@ business_flows:
         position_x: 20
         position_y: 1
 
-      - key: verify_pigging_interlocks
-        name: "Evaluate SCADA Interlocks & Pressure Equalization"
+      - key: read_cathodic_protection_status
+        name: "Read Cathodic Protection Potential Telemetry"
+        type: item-read
+        options:
+          collection: ncsp_pipeline_integrity
+          key: "{{read_pipeline_sensor_telemetry.launcher_station_id}}"
+          query:
+            fields:
+              - id
+              - kilometer_post
+              - cp_potential_mv
+              - integrity_status
+        position_x: 40
+        position_y: 1
+
+      - key: verify_pipeline_and_trap_integrity
+        name: "Verify Equalized Barrel Pressure, Armed ESD & CP Limits"
         type: condition
         options:
           filter:
             _and:
-              - read_scada_valves:
+              - read_station_scada_valves:
                   esd_valves_armed:
                     _eq: true
-              - read_scada_valves:
+              - read_station_scada_valves:
                   bypass_lineup_correct:
                     _eq: true
-              - read_scada_valves:
+              - read_station_scada_valves:
                   kicker_valve_open:
                     _eq: true
-              - read_scada_valves:
+              - read_station_scada_valves:
                   barrel_pressure_equalized:
                     _eq: true
-        position_x: 40
+              - read_cathodic_protection_status:
+                  cp_potential_mv:
+                    _lte: -850.0
+              - read_cathodic_protection_status:
+                  cp_potential_mv:
+                    _gte: -1200.0
+        position_x: 60
         position_y: 1
 
-      - key: authorize_pig_launch
-        name: "Authorize Pipeline Pig Launch"
+      - key: authorize_pig_trap_operation
+        name: "Authorize Pig Trap Door & Launch Sequence"
         type: item-update
         options:
           collection: ncsp_pigging_runs
@@ -222,22 +1071,23 @@ business_flows:
           data:
             status: launch_authorized
             pig_signal_armed: true
+            sensor_health: optimal_green
             launch_authorized_at: "{{$NOW}}"
-        position_x: 60
-        position_y: 1
-
-      - key: notify_launch_authorized
-        name: "Notify Gas Dispatch & Field Operations of Cleared Launch"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.gas_dispatcher_id}}"
-          subject: "Pig Launch Cleared: Interlocks Verified for Run {{read_pigging_run.run_code}}"
-          message: "Barrel equalized with mainline. SCADA ESD interlocks armed and bypass open. Authorized to open main pig trap door."
         position_x: 80
         position_y: 1
 
-      - key: abort_pig_launch
-        name: "Abort Launch Due to Interlock Violation"
+      - key: notify_integrity_cleared
+        name: "Notify Gas Dispatch of Cleared Pig Launch Sequence"
+        type: notification
+        options:
+          recipient: "GAS_DISPATCH_OPERATIONS"
+          subject: "SCADA & CP Verified: Pig Launch Authorized for {{read_pipeline_sensor_telemetry.run_code}}"
+          message: "Launcher barrel pressure equalized. SCADA ESD interlocks armed. CP potential nominal (-850 to -1200 mV). Pig trap door sequence authorized."
+        position_x: 100
+        position_y: 1
+
+      - key: engage_pig_trap_safety_inhibit
+        name: "Engage Pig Trap Safety Inhibit & Set Alert"
         type: item-update
         options:
           collection: ncsp_pigging_runs
@@ -245,28 +1095,30 @@ business_flows:
           data:
             status: launch_hold_esd_interlock
             pig_signal_armed: false
-            alert_flag: esd_inhibit_or_pressure_differential
-        position_x: 60
-        position_y: 15
-
-      - key: notify_launch_abort
-        name: "Alert Pipeline Superintendent of Pig Launch Abort"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.pipeline_superintendent_id}}"
-          subject: "HOLD: Pigging Launch Aborted for Run {{read_pigging_run.run_code}}"
-          message: "Launch sequence aborted. SCADA reported unready ESD valve status or unequalized barrel pressure."
+            sensor_health: degraded_alarm
+            alert_flag: unequal_pressure_or_cp_abnormal
         position_x: 80
         position_y: 15
 
+      - key: notify_integrity_fault
+        name: "Alert Pipeline Superintendent of Sensor Interlock Hold"
+        type: notification
+        options:
+          recipient: "PIPELINE_SUPERINTENDENT"
+          subject: "INTEGRITY HOLD: Launch Aborted for Run {{read_pipeline_sensor_telemetry.run_code}}"
+          message: "Launch sequence inhibited: SCADA reported unequalized barrel pressure, disarmed ESD valves, or CP potential out of -850 to -1200 mV range."
+        position_x: 100
+        position_y: 15
+
     edges:
-      - ["$trigger", "read_pigging_run", "resolve"]
-      - ["read_pigging_run", "read_scada_valves", "resolve"]
-      - ["read_scada_valves", "verify_pigging_interlocks", "resolve"]
-      - ["verify_pigging_interlocks", "authorize_pig_launch", "resolve"]
-      - ["authorize_pig_launch", "notify_launch_authorized", "resolve"]
-      - ["verify_pigging_interlocks", "abort_pig_launch", "reject"]
-      - ["abort_pig_launch", "notify_launch_abort", "resolve"]
+      - ["$trigger", "read_pipeline_sensor_telemetry", "resolve"]
+      - ["read_pipeline_sensor_telemetry", "read_station_scada_valves", "resolve"]
+      - ["read_station_scada_valves", "read_cathodic_protection_status", "resolve"]
+      - ["read_cathodic_protection_status", "verify_pipeline_and_trap_integrity", "resolve"]
+      - ["verify_pipeline_and_trap_integrity", "authorize_pig_trap_operation", "resolve"]
+      - ["authorize_pig_trap_operation", "notify_integrity_cleared", "resolve"]
+      - ["verify_pipeline_and_trap_integrity", "engage_pig_trap_safety_inhibit", "reject"]
+      - ["engage_pig_trap_safety_inhibit", "notify_integrity_fault", "resolve"]
 
 rules:
   - rule_id: NCSP-PIG-001
@@ -284,6 +1136,22 @@ rules:
     condition: "cp_potential_mv <= -850.0 && cp_potential_mv >= -1200.0"
     enforcement: warning
     action: "Log corrosion mitigation work order and dispatch technician."
+
+  - rule_id: NCSP-B31G-003
+    name: "ASME B31G Estimated Repair Factor Limit"
+    description: "Corrosion anomalies with Estimated Repair Factor (ERF = MAOP / Safe Operating Pressure) > 1.0 require immediate MAOP derating or repair sleeve installation."
+    severity: critical
+    condition: "erf_ratio <= 1.0"
+    enforcement: strict_rejection
+    action: "Trigger automatic MAOP derating and dispatch emergency repair sleeve."
+
+  - rule_id: NCSP-ROW-004
+    name: "Right-of-Way 50-Meter Safety Corridor Protection"
+    description: "Excavation and heavy mechanical earthmoving within 50 meters of the 26-inch trunkline is strictly prohibited without specialized permit."
+    severity: critical
+    condition: "distance_to_pipeline_m > 50.0"
+    enforcement: strict_rejection
+    action: "Suspend nearby excavation permits and dispatch security intercept."
 
 insights:
   - name: "Pipeline Integrity & Gas Metering Delivery Live Board"
@@ -434,4 +1302,3 @@ insights:
         height: 24
         icon: "propane_tank"
         color: "#00E676"
-

@@ -49,6 +49,20 @@ taxonomy_and_fields:
           type: timestamp
         - field: alert_flag
           type: string
+        - field: cbo1_preparer_id
+          type: uuid
+        - field: cbo2_verifier_id
+          type: uuid
+        - field: local1_operator_id
+          type: uuid
+        - field: local2_witness_id
+          type: uuid
+        - field: wph_holder_id
+          type: uuid
+        - field: cbo3_authorizer_id
+          type: uuid
+        - field: isolation_step
+          type: string
 
     - collection: aes_lockbox_registers
       name: "Lockbox (LBX) Safety Registers"
@@ -68,8 +82,61 @@ taxonomy_and_fields:
           type: boolean
         - field: keys_deposited_count
           type: integer
+        - field: contractor_locks_attached_count
+          type: integer
+        - field: contractor_locks_removed_count
+          type: integer
+        - field: active_contractor_count
+          type: integer
+        - field: all_contractors_cleared
+          type: boolean
+        - field: master_key_releasable
+          type: boolean
+        - field: forced_removal_executed
+          type: boolean
         - field: custodian_id
           type: uuid
+        - field: status
+          type: string
+        - field: alert_flag
+          type: string
+        - field: cleared_at
+          type: timestamp
+
+    - collection: aes_loto_forced_removals
+      name: "LOTO Forced Lock Removal Records"
+      description: "Emergency 3-party lock removal council protocol dossiers and Merkle audit records."
+      fields:
+        - field: id
+          type: uuid
+        - field: removal_no
+          type: string
+        - field: lockbox_id
+          type: uuid
+        - field: equipment_tag
+          type: string
+        - field: absent_wph_name
+          type: string
+        - field: absent_wph_id
+          type: uuid
+        - field: sce_signature
+          type: string
+        - field: custodian_signature
+          type: string
+        - field: hse_manager_signature
+          type: string
+        - field: field_sweep_cleared
+          type: boolean
+        - field: emergency_reason
+          type: string
+        - field: status
+          type: string
+        - field: merkle_audit_recorded
+          type: boolean
+        - field: alert_flag
+          type: string
+        - field: council_authorized_at
+          type: timestamp
 
     - collection: aes_cems_telemetry
       name: "CEMS Environmental Emissions"
@@ -93,6 +160,12 @@ taxonomy_and_fields:
           type: float
         - field: emission_compliance_status
           type: string
+        - field: capa_action_id
+          type: uuid
+        - field: alert_dispatched
+          type: boolean
+        - field: verified_at
+          type: timestamp
 
     - collection: aes_generation_units
       name: "Generation Unit Availability & Performance"
@@ -113,8 +186,110 @@ taxonomy_and_fields:
         - field: equivalent_availability_factor
           type: float
 
+    - collection: aes_contractor_equipment
+      name: "Contractor Safety Credential & Equipment Register"
+      description: "Statutory heavy lifting, pressure vessel, and personnel certifications for contractor work."
+      fields:
+        - field: id
+          type: uuid
+        - field: contractor_name
+          type: string
+        - field: equipment_code
+          type: string
+        - field: equipment_type
+          type: string
+        - field: crane_load_test_valid
+          type: boolean
+        - field: pressure_vessel_cert_valid
+          type: boolean
+        - field: electrical_tool_cert_valid
+          type: boolean
+        - field: operator_safety_card_valid
+          type: boolean
+        - field: hse_prequalification_score
+          type: float
+        - field: status
+          type: string
+        - field: ptw_issuance_allowed
+          type: boolean
+        - field: alert_flag
+          type: string
+        - field: certified_at
+          type: timestamp
+
+    - collection: aes_boiler_startups
+      name: "CFB Boiler Startup & Thermal Ramp Telemetry"
+      description: "Boiler drum metal temperature rates, pressure differentials, and CIWH interlock parameters."
+      fields:
+        - field: id
+          type: uuid
+        - field: boiler_tag
+          type: string
+        - field: status
+          type: string
+        - field: drum_temperature_rate_c_hr
+          type: float
+        - field: drum_pressure_bar
+          type: float
+        - field: metal_temp_top_bottom_delta_c
+          type: float
+        - field: feedwater_temp_c
+          type: float
+        - field: superheater_steam_temp_c
+          type: float
+        - field: ciwh_protection_active
+          type: boolean
+        - field: interlock_trip
+          type: boolean
+        - field: alert_flag
+          type: string
+
+    - collection: grc_actions
+      name: "Enterprise Corrective & Preventive Actions (CAPA)"
+      description: "Remediation workflows, root cause mitigation actions, and statutory environmental directives."
+      fields:
+        - field: id
+          type: uuid
+        - field: title
+          type: string
+        - field: source_module
+          type: string
+        - field: action_category
+          type: string
+        - field: priority
+          type: string
+        - field: status
+          type: string
+        - field: description
+          type: string
+        - field: assigned_to
+          type: string
+
+    - collection: hse_tasks
+      name: "Operational Safety Tasks"
+      description: "Discrete actionable field instructions dispatched to plant operations and safety personnel."
+      fields:
+        - field: id
+          type: uuid
+        - field: task_title
+          type: string
+        - field: unit_tag
+          type: string
+        - field: priority
+          type: string
+        - field: status
+          type: string
+        - field: assigned_to
+          type: string
+        - field: deadline_hours
+          type: integer
+
   relations:
     - collection: aes_loto_isolations
+      field: lockbox_id
+      related_collection: aes_lockbox_registers
+      type: m2o
+    - collection: aes_loto_forced_removals
       field: lockbox_id
       related_collection: aes_lockbox_registers
       type: m2o
@@ -144,9 +319,9 @@ taxonomy_and_fields:
         name: "High Voltage Switchyard (500kV / 220kV GIS)"
 
 business_flows:
-  - key: aes-loto-high-voltage-lockbox
-    name: "High-Voltage LOTO Lockbox (LBX) Verification & Isolation Approval Flow"
-    description: "Enforces strict physical lockbox verification (breaker racked out, earth switch closed, physical padlocks attached, master keys deposited) before authorizing electrical maintenance on high-voltage switchgear."
+  - key: aes-loto-4eyes-multi-step
+    name: "High-Voltage 4-Eyes LOTO 12-State Isolation & Lockbox Flow"
+    description: "Enforces 12-state hazardous energy isolation lifecycle with strict 4-eyes Maker-Checker SoD (CBO-1, CBO-2, Local 1, Local 2, WPH, CBO-3) across 500kV/220kV switchgear."
     status: active
     accountability: activity
     trigger:
@@ -159,8 +334,8 @@ business_flows:
         status:
           _eq: isolation_submitted
     nodes:
-      - key: read_isolation_request
-        name: "Read High-Voltage Isolation Request"
+      - key: read_isolation_dossier
+        name: "Read High-Voltage Isolation Request Dossier"
         type: item-read
         options:
           collection: aes_loto_isolations
@@ -172,15 +347,22 @@ business_flows:
               - equipment_tag
               - voltage_class_kv
               - lockbox_id
+              - cbo1_preparer_id
+              - cbo2_verifier_id
+              - local1_operator_id
+              - local2_witness_id
+              - wph_holder_id
+              - cbo3_authorizer_id
+              - status
         position_x: 1
         position_y: 1
 
-      - key: read_lockbox_status
+      - key: read_lockbox_isolation_points
         name: "Read Physical Lockbox Status & Key Verification"
         type: item-read
         options:
           collection: aes_lockbox_registers
-          key: "{{read_isolation_request.lockbox_id}}"
+          key: "{{read_isolation_dossier.lockbox_id}}"
           query:
             fields:
               - id
@@ -193,29 +375,50 @@ business_flows:
         position_x: 20
         position_y: 1
 
-      - key: verify_lockbox_safety
-        name: "Verify Lockbox Isolation Safety Criteria"
+      - key: check_4eyes_sod_separation
+        name: "Verify 4-Eyes Maker-Checker Separation of Duties"
         type: condition
         options:
           filter:
             _and:
-              - read_lockbox_status:
-                  breaker_racked_out:
-                    _eq: true
-              - read_lockbox_status:
-                  earth_switch_closed:
-                    _eq: true
-              - read_lockbox_status:
-                  padlocks_applied:
-                    _eq: true
-              - read_lockbox_status:
-                  master_key_secured:
-                    _eq: true
+              - read_isolation_dossier:
+                  cbo1_preparer_id:
+                    _neq: "{{read_isolation_dossier.cbo2_verifier_id}}"
+              - read_isolation_dossier:
+                  local1_operator_id:
+                    _neq: "{{read_isolation_dossier.local2_witness_id}}"
+              - read_isolation_dossier:
+                  wph_holder_id:
+                    _neq: "{{read_isolation_dossier.cbo3_authorizer_id}}"
         position_x: 40
         position_y: 1
 
-      - key: authorize_isolation
-        name: "Authorize High-Voltage Isolation"
+      - key: verify_physical_isolation_safeguards
+        name: "Verify Physical Isolation & Earth Switch Latching"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_lockbox_isolation_points:
+                  breaker_racked_out:
+                    _eq: true
+              - read_lockbox_isolation_points:
+                  earth_switch_closed:
+                    _eq: true
+              - read_lockbox_isolation_points:
+                  padlocks_applied:
+                    _eq: true
+              - read_lockbox_isolation_points:
+                  master_key_secured:
+                    _eq: true
+              - read_lockbox_isolation_points:
+                  keys_deposited_count:
+                    _gte: 1
+        position_x: 60
+        position_y: 1
+
+      - key: authorize_12state_isolation
+        name: "Authorize 12-State High-Voltage Isolation"
         type: item-update
         options:
           collection: aes_loto_isolations
@@ -223,22 +426,23 @@ business_flows:
           data:
             status: isolated_verified
             work_authorized: true
+            isolation_step: cbo3_lockbox_secured
             isolation_witnessed_at: "{{$NOW}}"
-        position_x: 60
-        position_y: 1
-
-      - key: notify_loto_authorized
-        name: "Notify Maintenance Team of Verified Isolation"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.maintenance_supervisor_id}}"
-          subject: "LOTO Verified: Safe to Work on {{read_isolation_request.equipment_tag}} ({{read_isolation_request.voltage_class_kv}} kV)"
-          message: "Breakers racked out, earth switch closed, and lockbox secured. High-voltage isolation approved."
         position_x: 80
         position_y: 1
 
-      - key: reject_isolation
-        name: "Reject Isolation Due to Missing Safeguards"
+      - key: notify_isolation_cleared
+        name: "Notify WPH of Completed 4-Eyes Isolation"
+        type: notification
+        options:
+          recipient: "{{read_isolation_dossier.wph_holder_id}}"
+          subject: "LOTO Authorized: 4-Eyes Isolation Verified for {{read_isolation_dossier.equipment_tag}}"
+          message: "12-state isolation verified. CBO-1/2, Local 1/2, and CBO-3 signed. Lockbox secured. Maintenance authorized."
+        position_x: 100
+        position_y: 1
+
+      - key: reject_physical_deficiency
+        name: "Reject Isolation Due to Missing Physical Safeguards"
         type: item-update
         options:
           collection: aes_loto_isolations
@@ -246,28 +450,665 @@ business_flows:
           data:
             status: isolation_verification_failed
             work_authorized: false
-            alert_flag: incomplete_lockbox_isolation
+            alert_flag: missing_rackout_or_grounding
+        position_x: 80
+        position_y: 15
+
+      - key: notify_physical_abort
+        name: "Alert CBO of Physical Isolation Failure"
+        type: notification
+        options:
+          recipient: "{{read_isolation_dossier.cbo3_authorizer_id}}"
+          subject: "ISOLATION REJECTED: Physical Safeguard Missing on {{read_isolation_dossier.equipment_tag}}"
+          message: "High-voltage isolation rejected: breaker not racked out, earth switch open, or master key unverified."
+        position_x: 100
+        position_y: 15
+
+      - key: reject_sod_violation
+        name: "Reject Isolation Due to Maker-Checker SoD Breach"
+        type: item-update
+        options:
+          collection: aes_loto_isolations
+          key: "{{$trigger.key}}"
+          data:
+            status: isolation_rejected_sod_conflict
+            work_authorized: false
+            alert_flag: maker_checker_sod_breach
+        position_x: 60
+        position_y: 30
+
+      - key: notify_sod_breach
+        name: "Alert SCE of SoD Separation Conflict"
+        type: notification
+        options:
+          recipient: "{{read_isolation_dossier.cbo1_preparer_id}}"
+          subject: "SECURITY ALERT: LOTO 4-Eyes SoD Violation on {{read_isolation_dossier.equipment_tag}}"
+          message: "Isolation rejected due to Maker-Checker conflict: CBO-1 cannot verify CBO-2, or Local Operator 1 cannot witness self."
+        position_x: 80
+        position_y: 30
+
+    edges:
+      - ["$trigger", "read_isolation_dossier", "resolve"]
+      - ["read_isolation_dossier", "read_lockbox_isolation_points", "resolve"]
+      - ["read_lockbox_isolation_points", "check_4eyes_sod_separation", "resolve"]
+      - ["check_4eyes_sod_separation", "verify_physical_isolation_safeguards", "resolve"]
+      - ["check_4eyes_sod_separation", "reject_sod_violation", "reject"]
+      - ["verify_physical_isolation_safeguards", "authorize_12state_isolation", "resolve"]
+      - ["verify_physical_isolation_safeguards", "reject_physical_deficiency", "reject"]
+      - ["authorize_12state_isolation", "notify_isolation_cleared", "resolve"]
+      - ["reject_physical_deficiency", "notify_physical_abort", "resolve"]
+      - ["reject_sod_violation", "notify_sod_breach", "resolve"]
+
+  - key: aes-loto-group-lockbox-sync
+    name: "Group Lockbox (GLBX) Custody & Contractor Lock Synchronization Flow"
+    description: "Tracks contractor master and personal padlocks on group lockboxes (OSHA 1910.147). Forbids de-isolation and re-energization until 100% of contractor locks are removed."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_lockbox_registers
+      filter:
+        status:
+          _eq: deisolation_clearance_requested
+    nodes:
+      - key: read_lockbox_custody
+        name: "Read Group Lockbox Active Custody Records"
+        type: item-read
+        options:
+          collection: aes_lockbox_registers
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - lockbox_code
+              - contractor_locks_attached_count
+              - contractor_locks_removed_count
+              - active_contractor_count
+              - custodian_id
+        position_x: 1
+        position_y: 1
+
+      - key: verify_contractor_locks_cleared
+        name: "Verify 100% Contractor Padlocks Removed"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_lockbox_custody:
+                  active_contractor_count:
+                    _eq: 0
+              - read_lockbox_custody:
+                  contractor_locks_attached_count:
+                    _eq: "{{read_lockbox_custody.contractor_locks_removed_count}}"
+        position_x: 20
+        position_y: 1
+
+      - key: release_group_lockbox
+        name: "Release Group Lockbox & Authorize Key Retrieval"
+        type: item-update
+        options:
+          collection: aes_lockbox_registers
+          key: "{{$trigger.key}}"
+          data:
+            status: available_cleared
+            all_contractors_cleared: true
+            master_key_releasable: true
+            cleared_at: "{{$NOW}}"
+        position_x: 40
+        position_y: 1
+
+      - key: notify_cbo_lockbox_cleared
+        name: "Notify Custodian that All Padlocks are Cleared"
+        type: notification
+        options:
+          recipient: "{{read_lockbox_custody.custodian_id}}"
+          subject: "Lockbox Cleared: All Contractor Padlocks Removed from {{read_lockbox_custody.lockbox_code}}"
+          message: "All contractor crews have removed personal locks. CBO authorized to retrieve master key and proceed with plant de-isolation."
+        position_x: 60
+        position_y: 1
+
+      - key: retain_group_lockbox_hold
+        name: "Hold Lockbox Due to Lingering Contractor Padlocks"
+        type: item-update
+        options:
+          collection: aes_lockbox_registers
+          key: "{{$trigger.key}}"
+          data:
+            status: lockbox_hold_contractors_attached
+            master_key_releasable: false
+            alert_flag: contractor_locks_still_present
+        position_x: 40
+        position_y: 15
+
+      - key: notify_contractor_locks_remaining
+        name: "Alert Custodian of Lingering Contractor Locks"
+        type: notification
+        options:
+          recipient: "{{read_lockbox_custody.custodian_id}}"
+          subject: "DEISOLATION BLOCKED: Contractor Padlocks Still Present on {{read_lockbox_custody.lockbox_code}}"
+          message: "De-isolation rejected. Active contractor locks remain attached to lockbox. Switchgear re-energization prohibited."
         position_x: 60
         position_y: 15
 
-      - key: notify_loto_aborted
-        name: "Alert Shift Charge Engineer of Failed Isolation"
+    edges:
+      - ["$trigger", "read_lockbox_custody", "resolve"]
+      - ["read_lockbox_custody", "verify_contractor_locks_cleared", "resolve"]
+      - ["verify_contractor_locks_cleared", "release_group_lockbox", "resolve"]
+      - ["release_group_lockbox", "notify_cbo_lockbox_cleared", "resolve"]
+      - ["verify_contractor_locks_cleared", "retain_group_lockbox_hold", "reject"]
+      - ["retain_group_lockbox_hold", "notify_contractor_locks_remaining", "resolve"]
+
+  - key: aes-loto-forced-removal-council
+    name: "Forced Lock Removal Emergency Council 3-Party Protocol"
+    description: "Strict multi-signoff emergency lock cutting protocol requiring unanimous consent of Shift Charge Engineer (SCE), Lockbox Custodian, and Plant HSE Manager following verified field search."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_loto_forced_removals
+      filter:
+        status:
+          _eq: council_convened
+    nodes:
+      - key: read_forced_removal_dossier
+        name: "Read Forced Lock Removal Request Dossier"
+        type: item-read
+        options:
+          collection: aes_loto_forced_removals
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - removal_no
+              - lockbox_id
+              - equipment_tag
+              - absent_wph_name
+              - sce_signature
+              - custodian_signature
+              - hse_manager_signature
+              - field_sweep_cleared
+              - emergency_reason
+        position_x: 1
+        position_y: 1
+
+      - key: read_target_lockbox
+        name: "Read Target Lockbox Register & Status"
+        type: item-read
+        options:
+          collection: aes_lockbox_registers
+          key: "{{read_forced_removal_dossier.lockbox_id}}"
+          query:
+            fields:
+              - id
+              - lockbox_code
+              - status
+              - breaker_racked_out
+        position_x: 20
+        position_y: 1
+
+      - key: verify_3party_council_approval
+        name: "Verify Unanimous 3-Party Council Approval & Field Search"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_forced_removal_dossier:
+                  field_sweep_cleared:
+                    _eq: true
+              - read_forced_removal_dossier:
+                  sce_signature:
+                    _nnull: true
+              - read_forced_removal_dossier:
+                  custodian_signature:
+                    _nnull: true
+              - read_forced_removal_dossier:
+                  hse_manager_signature:
+                    _nnull: true
+        position_x: 40
+        position_y: 1
+
+      - key: authorize_forced_removal
+        name: "Authorize Bolt-Cutter Removal & Stamp Audit Trail"
+        type: item-update
+        options:
+          collection: aes_loto_forced_removals
+          key: "{{$trigger.key}}"
+          data:
+            status: authorized_for_cutting
+            merkle_audit_recorded: true
+            council_authorized_at: "{{$NOW}}"
+        position_x: 60
+        position_y: 1
+
+      - key: update_lockbox_cut_status
+        name: "Record Forced Lock Cut on Lockbox Register"
+        type: item-update
+        options:
+          collection: aes_lockbox_registers
+          key: "{{read_forced_removal_dossier.lockbox_id}}"
+          data:
+            status: forced_lock_cut_authorized
+            forced_removal_executed: true
+            alert_flag: forced_lock_cut_logged
+        position_x: 80
+        position_y: 1
+
+      - key: broadcast_forced_removal_audit
+        name: "Broadcast Forced Lock Removal Audit Notification"
         type: notification
         options:
-          recipient: "{{$trigger.payload.shift_charge_engineer_id}}"
-          subject: "SAFETY ALERT: High-Voltage LOTO Verification Failed for {{read_isolation_request.equipment_tag}}"
-          message: "Isolation rejected: missing breaker rack-out, open earth switch, or unverified lockbox padlock."
+          recipient: "{{read_forced_removal_dossier.sce_signature}}"
+          subject: "EMERGENCY LOTO FORCED REMOVAL AUTHORIZED: Lockbox {{read_target_lockbox.lockbox_code}}"
+          message: "Unanimous council approval granted (SCE, Custodian, HSE). Field search confirmed no personnel inside {{read_forced_removal_dossier.equipment_tag}}. Bolt-cutter removal authorized and logged to Merkle audit ledger."
+        position_x: 100
+        position_y: 1
+
+      - key: reject_forced_removal
+        name: "Reject Forced Removal Due to Incomplete Signoff"
+        type: item-update
+        options:
+          collection: aes_loto_forced_removals
+          key: "{{$trigger.key}}"
+          data:
+            status: rejected_incomplete_council
+            merkle_audit_recorded: false
+            alert_flag: missing_council_signatures_or_sweep
+        position_x: 60
+        position_y: 15
+
+      - key: notify_council_rejection
+        name: "Alert SCE of Forced Removal Protocol Rejection"
+        type: notification
+        options:
+          recipient: "{{read_forced_removal_dossier.sce_signature}}"
+          subject: "FORCED REMOVAL REJECTED: Incomplete Council Signatures or Unverified Field Sweep"
+          message: "Cutting of abandoned lock on {{read_target_lockbox.lockbox_code}} DENIED. All 3 signatures and verified field sweep required before any forced removal."
         position_x: 80
         position_y: 15
 
     edges:
-      - ["$trigger", "read_isolation_request", "resolve"]
-      - ["read_isolation_request", "read_lockbox_status", "resolve"]
-      - ["read_lockbox_status", "verify_lockbox_safety", "resolve"]
-      - ["verify_lockbox_safety", "authorize_isolation", "resolve"]
-      - ["authorize_isolation", "notify_loto_authorized", "resolve"]
-      - ["verify_lockbox_safety", "reject_isolation", "reject"]
-      - ["reject_isolation", "notify_loto_aborted", "resolve"]
+      - ["$trigger", "read_forced_removal_dossier", "resolve"]
+      - ["read_forced_removal_dossier", "read_target_lockbox", "resolve"]
+      - ["read_target_lockbox", "verify_3party_council_approval", "resolve"]
+      - ["verify_3party_council_approval", "authorize_forced_removal", "resolve"]
+      - ["authorize_forced_removal", "update_lockbox_cut_status", "resolve"]
+      - ["update_lockbox_cut_status", "broadcast_forced_removal_audit", "resolve"]
+      - ["verify_3party_council_approval", "reject_forced_removal", "reject"]
+      - ["reject_forced_removal", "notify_council_rejection", "resolve"]
+
+  - key: aes-cems-exceedance-auto-capa
+    name: "CEMS Continuous Emission Exceedance Alert & Automatic CAPA Flow"
+    description: "Monitors stack flue gas emissions against TCVN 7440 statutory caps (SO2 > 500, NOx > 1000, Dust > 100 mg/Nm3). Automatically dispatches environmental CAPA and corrective FGD/ESP operations."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_cems_telemetry
+      filter:
+        emission_compliance_status:
+          _eq: exceedance_detected
+    nodes:
+      - key: read_cems_telemetry
+        name: "Read Stack Continuous Flue Gas Telemetry"
+        type: item-read
+        options:
+          collection: aes_cems_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - stack_id
+              - timestamp
+              - so2_instantaneous
+              - nox_instantaneous
+              - dust_instantaneous
+              - co_instantaneous
+              - o2_percentage
+        position_x: 1
+        position_y: 1
+
+      - key: evaluate_cems_thresholds
+        name: "Evaluate TCVN 7440 Statutory Emission Caps"
+        type: condition
+        options:
+          filter:
+            _or:
+              - read_cems_telemetry:
+                  so2_instantaneous:
+                    _gt: 500.0
+              - read_cems_telemetry:
+                  nox_instantaneous:
+                    _gt: 1000.0
+              - read_cems_telemetry:
+                  dust_instantaneous:
+                    _gt: 100.0
+        position_x: 20
+        position_y: 1
+
+      - key: create_cems_emergency_capa
+        name: "Create Emergency Environmental CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "CEMS Stack {{read_cems_telemetry.stack_id}} Exceedance Mitigation"
+            source_module: cems_surveillance
+            action_category: environmental_compliance
+            priority: critical
+            status: open
+            description: "Flue gas exceedance logged: SO2={{read_cems_telemetry.so2_instantaneous}} mg/Nm3 (cap 500), NOx={{read_cems_telemetry.nox_instantaneous}} mg/Nm3 (cap 1000), Dust={{read_cems_telemetry.dust_instantaneous}} mg/Nm3 (cap 100)."
+        position_x: 40
+        position_y: 1
+
+      - key: create_fgd_esp_tuning_task
+        name: "Dispatch Operational FGD & ESP Tuning Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            task_title: "Emergency FGD Slurry Rate Increase & ESP Electrical Field Inspection"
+            unit_tag: "FGD-ESP-STACK"
+            priority: critical
+            status: assigned
+            assigned_to: "FGD_Lead_Operator"
+            deadline_hours: 1
+        position_x: 60
+        position_y: 1
+
+      - key: update_cems_telemetry_status
+        name: "Update CEMS Record with Active CAPA Reference"
+        type: item-update
+        options:
+          collection: aes_cems_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            emission_compliance_status: exceedance_capa_dispatched
+            alert_dispatched: true
+        position_x: 80
+        position_y: 1
+
+      - key: notify_cems_environmental_alert
+        name: "Dispatch High-Priority SMS & Alert to Plant Officers"
+        type: notification
+        options:
+          recipient: "ENVIRONMENTAL_DUTY_OFFICER"
+          subject: "CRITICAL CEMS EXCEEDANCE: Stack {{read_cems_telemetry.stack_id}} Exceeded Regulatory Cap"
+          message: "SO2={{read_cems_telemetry.so2_instantaneous}} mg/Nm3, NOx={{read_cems_telemetry.nox_instantaneous}} mg/Nm3, Dust={{read_cems_telemetry.dust_instantaneous}} mg/Nm3. Emergency CAPA created. FGD lime slurry increase mandated."
+        position_x: 100
+        position_y: 1
+
+      - key: update_cems_compliant_status
+        name: "Reset CEMS Status to Statutory Compliance"
+        type: item-update
+        options:
+          collection: aes_cems_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            emission_compliance_status: compliant
+            alert_dispatched: false
+        position_x: 40
+        position_y: 15
+
+      - key: notify_cems_normalization
+        name: "Notify Environmental Team of Emission Normalization"
+        type: notification
+        options:
+          recipient: "ENVIRONMENTAL_DUTY_OFFICER"
+          subject: "CEMS Normalization: Stack {{read_cems_telemetry.stack_id}} Emissions Compliant"
+          message: "Continuous emissions returned within TCVN 7440 statutory caps. Telemetry verified."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_cems_telemetry", "resolve"]
+      - ["read_cems_telemetry", "evaluate_cems_thresholds", "resolve"]
+      - ["evaluate_cems_thresholds", "create_cems_emergency_capa", "resolve"]
+      - ["create_cems_emergency_capa", "create_fgd_esp_tuning_task", "resolve"]
+      - ["create_fgd_esp_tuning_task", "update_cems_telemetry_status", "resolve"]
+      - ["update_cems_telemetry_status", "notify_cems_environmental_alert", "resolve"]
+      - ["evaluate_cems_thresholds", "update_cems_compliant_status", "reject"]
+      - ["update_cems_compliant_status", "notify_cems_normalization", "resolve"]
+
+  - key: aes-contractor-credential-safety-gate
+    name: "Contractor Safety Credential & Heavy Equipment Inspection Gate Flow"
+    description: "Validates statutory load test certificates for mobile cranes, hydrostatic test tags for pressure vessels, and electrician safety licenses before authorizing PTW issuance."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_contractor_equipment
+      filter:
+        status:
+          _eq: verification_requested
+    nodes:
+      - key: read_contractor_equipment_record
+        name: "Read Contractor Equipment & Personnel Dossier"
+        type: item-read
+        options:
+          collection: aes_contractor_equipment
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - contractor_name
+              - equipment_code
+              - equipment_type
+              - crane_load_test_valid
+              - pressure_vessel_cert_valid
+              - electrical_tool_cert_valid
+              - operator_safety_card_valid
+              - hse_prequalification_score
+        position_x: 1
+        position_y: 1
+
+      - key: verify_contractor_safety_credentials
+        name: "Verify 100% Inspection Tags & Qualification Score"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_contractor_equipment_record:
+                  crane_load_test_valid:
+                    _eq: true
+              - read_contractor_equipment_record:
+                  pressure_vessel_cert_valid:
+                    _eq: true
+              - read_contractor_equipment_record:
+                  electrical_tool_cert_valid:
+                    _eq: true
+              - read_contractor_equipment_record:
+                  operator_safety_card_valid:
+                    _eq: true
+              - read_contractor_equipment_record:
+                  hse_prequalification_score:
+                    _gte: 80.0
+        position_x: 20
+        position_y: 1
+
+      - key: approve_equipment_for_ptw
+        name: "Approve Equipment & Authorize PTW Association"
+        type: item-update
+        options:
+          collection: aes_contractor_equipment
+          key: "{{$trigger.key}}"
+          data:
+            status: certified_active
+            ptw_issuance_allowed: true
+            certified_at: "{{$NOW}}"
+        position_x: 40
+        position_y: 1
+
+      - key: notify_contractor_approved
+        name: "Notify Gate Security of Cleared Equipment"
+        type: notification
+        options:
+          recipient: "PLANT_GATE_SECURITY"
+          subject: "EQUIPMENT CLEARED: {{read_contractor_equipment_record.equipment_code}} Certified for Site Entry"
+          message: "Contractor {{read_contractor_equipment_record.contractor_name}} equipment {{read_contractor_equipment_record.equipment_code}} ({{read_contractor_equipment_record.equipment_type}}) passed 100% inspection checks. PTW attachment authorized."
+        position_x: 60
+        position_y: 1
+
+      - key: block_equipment_and_ptw
+        name: "Block Non-Compliant Equipment & Inhibit PTW"
+        type: item-update
+        options:
+          collection: aes_contractor_equipment
+          key: "{{$trigger.key}}"
+          data:
+            status: blocked_certification_expired
+            ptw_issuance_allowed: false
+            alert_flag: expired_inspection_or_low_score
+        position_x: 40
+        position_y: 15
+
+      - key: notify_contractor_blocked
+        name: "Alert Safety Team of Blocked Contractor Equipment"
+        type: notification
+        options:
+          recipient: "HSE_CONTRACTOR_SUPERVISOR"
+          subject: "SAFETY GATE REJECTION: {{read_contractor_equipment_record.equipment_code}} Blocked"
+          message: "Equipment certification failed: expired load test, pressure vessel tag, or contractor safety score < 80%. PTW creation blocked."
+        position_x: 60
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_contractor_equipment_record", "resolve"]
+      - ["read_contractor_equipment_record", "verify_contractor_safety_credentials", "resolve"]
+      - ["verify_contractor_safety_credentials", "approve_equipment_for_ptw", "resolve"]
+      - ["approve_equipment_for_ptw", "notify_contractor_approved", "resolve"]
+      - ["verify_contractor_safety_credentials", "block_equipment_and_ptw", "reject"]
+      - ["block_equipment_and_ptw", "notify_contractor_blocked", "resolve"]
+
+  - key: aes-boiler-ciwh-interlock
+    name: "CFB Boiler Thermal Ramp Rate & CIWH Water Hammer Prevention Interlock Flow"
+    description: "Monitors boiler drum metal temperature rate of rise (< 55°C/h) and top-to-bottom differential (< 40°C) during warm-up to prevent Cold Inflow Water Hammer (CIWH) and structural drum fatigue."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_boiler_startups
+      filter:
+        status:
+          _eq: startup_ramp_in_progress
+    nodes:
+      - key: read_boiler_startup_telemetry
+        name: "Read Boiler Startup Drum Telemetry"
+        type: item-read
+        options:
+          collection: aes_boiler_startups
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - boiler_tag
+              - drum_temperature_rate_c_hr
+              - drum_pressure_bar
+              - metal_temp_top_bottom_delta_c
+              - feedwater_temp_c
+              - superheater_steam_temp_c
+        position_x: 1
+        position_y: 1
+
+      - key: verify_boiler_thermal_limits
+        name: "Verify Drum Ramp Rate <= 55°C/h & Delta <= 40°C"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_boiler_startup_telemetry:
+                  drum_temperature_rate_c_hr:
+                    _lte: 55.0
+              - read_boiler_startup_telemetry:
+                  metal_temp_top_bottom_delta_c:
+                    _lte: 40.0
+        position_x: 20
+        position_y: 1
+
+      - key: authorize_continuous_warmup
+        name: "Authorize Continuous Boiler Warm-Up Sequence"
+        type: item-update
+        options:
+          collection: aes_boiler_startups
+          key: "{{$trigger.key}}"
+          data:
+            status: warmup_ramp_normal
+            ciwh_protection_active: true
+            interlock_trip: false
+        position_x: 40
+        position_y: 1
+
+      - key: notify_boiler_ramp_normal
+        name: "Notify Control Room of Compliant Thermal Gradient"
+        type: notification
+        options:
+          recipient: "BOILER_CONTROL_ROOM_OPERATOR"
+          subject: "Boiler {{read_boiler_startup_telemetry.boiler_tag}} Thermal Ramp Compliant"
+          message: "Drum ramp rate {{read_boiler_startup_telemetry.drum_temperature_rate_c_hr}} °C/h is within safe 55°C/h ASME Sec I limit. Differential {{read_boiler_startup_telemetry.metal_temp_top_bottom_delta_c}} °C compliant. Continue warm-up."
+        position_x: 60
+        position_y: 1
+
+      - key: trip_boiler_ramp_interlock
+        name: "Engage Emergency Fuel Hold & Interlock Trip"
+        type: item-update
+        options:
+          collection: aes_boiler_startups
+          key: "{{$trigger.key}}"
+          data:
+            status: tripped_thermal_ramp_exceeded
+            ciwh_protection_active: true
+            interlock_trip: true
+            alert_flag: thermal_shock_ciwh_prevention
+        position_x: 40
+        position_y: 15
+
+      - key: create_boiler_inspection_action
+        name: "Create Immediate Thermal Ramp Investigation CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Boiler Thermal Ramp Exceedance Investigation - {{read_boiler_startup_telemetry.boiler_tag}}"
+            source_module: boiler_interlock
+            action_category: asset_integrity
+            priority: critical
+            status: open
+            description: "Boiler drum ramp rate exceeded 55°C/h (measured {{read_boiler_startup_telemetry.drum_temperature_rate_c_hr}} °C/h). Automatic interlock engaged to prevent CIWH thermal shock."
+        position_x: 60
+        position_y: 15
+
+      - key: notify_boiler_trip_emergency
+        name: "Alert SCE of Emergency Ramp Rate Interlock Trip"
+        type: notification
+        options:
+          recipient: "SHIFT_CHARGE_ENGINEER"
+          subject: "EMERGENCY INTERLOCK TRIP: Boiler {{read_boiler_startup_telemetry.boiler_tag}} Thermal Ramp Exceeded"
+          message: "Drum ramp rate {{read_boiler_startup_telemetry.drum_temperature_rate_c_hr}} °C/h exceeded 55°C/h limit. Firing hold engaged to prevent CIWH shock. Emergency CAPA created."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_boiler_startup_telemetry", "resolve"]
+      - ["read_boiler_startup_telemetry", "verify_boiler_thermal_limits", "resolve"]
+      - ["verify_boiler_thermal_limits", "authorize_continuous_warmup", "resolve"]
+      - ["authorize_continuous_warmup", "notify_boiler_ramp_normal", "resolve"]
+      - ["verify_boiler_thermal_limits", "trip_boiler_ramp_interlock", "reject"]
+      - ["trip_boiler_ramp_interlock", "create_boiler_inspection_action", "resolve"]
+      - ["create_boiler_inspection_action", "notify_boiler_trip_emergency", "resolve"]
 
 rules:
   - rule_id: AES-LOTO-001
@@ -285,6 +1126,22 @@ rules:
     condition: "so2_instantaneous <= 500.0"
     enforcement: escalation
     action: "Increase FGD limestone slurry circulation and log environmental anomaly."
+
+  - rule_id: AES-RAMP-003
+    name: "ASME Section I Boiler Thermal Ramp Limit"
+    description: "Boiler drum metal temperature rise rate must remain at or below 55°C per hour to prevent CIWH water hammer."
+    severity: critical
+    condition: "drum_temperature_rate_c_hr <= 55.0"
+    enforcement: strict_rejection
+    action: "Trigger fuel firing interlock hold and dispatch emergency inspection."
+
+  - rule_id: AES-CONT-004
+    name: "Contractor Heavy Equipment Safety Certification Gate"
+    description: "Mobile cranes and pressure vessels must possess current third-party statutory inspection certificates prior to PTW issuance."
+    severity: high
+    condition: "crane_load_test_valid == true && pressure_vessel_cert_valid == true"
+    enforcement: strict_rejection
+    action: "Block PTW creation and notify site access security."
 
 insights:
   - name: "Boiler & Turbine Availability & CEMS Emissions Dashboard"
@@ -416,4 +1273,3 @@ insights:
         height: 24
         icon: "bolt"
         color: "#00E5FF"
-

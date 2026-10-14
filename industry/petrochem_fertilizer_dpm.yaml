@@ -512,290 +512,243 @@ taxonomy_and_fields:
         name: "Utilities & Power Cogeneration"
 
 business_flows:
-  - key: dpm-ptw-hot-work-gas-check
-    name: "e-PTW Hot Work with Strict Gas Testing Check"
-    description: "Evaluates atmospheric gas testing for Hot Work PTWs against stringent petrochemical safety limits: CH4 < 10% LEL, O2 between 19.5% and 23.5%, and H2S < 10 ppm. Automatically authorizes work or auto-rejects and issues safety notifications."
+  - key: dpm-legal-clause-impact-router
+    name: "Điều phối Đánh giá Tác động Điều khoản Pháp lý (Legal Clause Impact Router)"
+    description: "Phân tích điều khoản pháp luật mới, phân loại mức độ ảnh hưởng đến các phân xưởng công nghệ (Xưởng 100 Amoniac, Xưởng 200 Ure, Xưởng 300 Phụ trợ), tự động khởi tạo hồ sơ tác động và giao trách nhiệm rà soát cho Quản đốc phân xưởng."
     status: active
     accountability: activity
     trigger:
       type: action
       scope:
+        - items.create
         - items.update
       collections:
-        - hse_permits
+        - legal_clauses
       filter:
-        status:
-          _eq: gas_test_submitted
-        permit_type:
-          _eq: hot_work
+        applicability_status:
+          _eq: applicable
     nodes:
-      - key: read_gas_test
-        name: "Read Latest Atmospheric Gas Test"
+      - key: read_clause_details
+        name: "Đọc Chi tiết Điều khoản Pháp lý"
         type: item-read
         options:
-          collection: hse_gas_tests
-          query:
-            filter:
-              permit_id:
-                _eq: "{{$trigger.key}}"
-            sort:
-              - "-test_timestamp"
-            limit: 1
-            fields:
-              - id
-              - permit_id
-              - gas_ch4_lel_percent
-              - gas_o2_percent
-              - gas_h2s_ppm
-              - gas_co_ppm
-        position_x: 1
-        position_y: 1
-
-      - key: evaluate_gas_limits
-        name: "Evaluate Strict Atmospheric Thresholds"
-        type: condition
-        options:
-          filter:
-            _and:
-              - read_gas_test:
-                  gas_ch4_lel_percent:
-                    _lt: 10.0
-              - read_gas_test:
-                  gas_o2_percent:
-                    _gte: 19.5
-              - read_gas_test:
-                  gas_o2_percent:
-                    _lte: 23.5
-              - read_gas_test:
-                  gas_h2s_ppm:
-                    _lt: 10.0
-        position_x: 20
-        position_y: 1
-
-      - key: approve_ptw
-        name: "Approve Hot Work PTW"
-        type: item-update
-        options:
-          collection: hse_permits
-          key: "{{$trigger.key}}"
-          data:
-            status: approved
-            gas_clearance: passed
-            work_authorized: true
-        position_x: 40
-        position_y: 1
-
-      - key: notify_approval
-        name: "Notify Field Supervisor of Safe Gas Clearance"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.supervisor_id}}"
-          subject: "PTW Approved: Atmosphere Safe for Hot Work (Permit #{{$trigger.key}})"
-          message: "Gas testing confirmed CH4 < 10% LEL, O2 19.5-23.5%, and H2S < 10 ppm. Hot work authorized."
-        position_x: 60
-        position_y: 1
-
-      - key: reject_ptw
-        name: "Auto-Reject PTW Due to Hazardous Atmosphere"
-        type: item-update
-        options:
-          collection: hse_permits
-          key: "{{$trigger.key}}"
-          data:
-            status: auto_rejected
-            gas_clearance: failed_hazardous_atmosphere
-            work_authorized: false
-            rejection_reason: "Violated strict atmospheric limits: CH4 must be <10% LEL, O2 19.5-23.5%, H2S <10 ppm."
-        position_x: 40
-        position_y: 15
-
-      - key: notify_rejection
-        name: "Alert Safety Officer of PTW Auto-Rejection"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.hse_officer_id}}"
-          subject: "CRITICAL: PTW Auto-Rejected for Hazardous Atmosphere (Permit #{{$trigger.key}})"
-          message: "Hot Work PTW auto-rejected. Flammable or toxic gas limits breached. Immediate area ventilation required."
-        position_x: 60
-        position_y: 15
-
-    edges:
-      - ["$trigger", "read_gas_test", "resolve"]
-      - ["read_gas_test", "evaluate_gas_limits", "resolve"]
-      - ["evaluate_gas_limits", "approve_ptw", "resolve"]
-      - ["approve_ptw", "notify_approval", "resolve"]
-      - ["evaluate_gas_limits", "reject_ptw", "reject"]
-      - ["reject_ptw", "notify_rejection", "resolve"]
-
-  - key: dpm-moc-3stage-review
-    name: "MOC 3-Stage Multi-discipline Review"
-    description: "Sequential 3-Stage Multi-discipline Review (Process Safety -> Operations -> Plant Manager) enforcing strict Stage-Gate signoffs before plant modifications can proceed."
-    status: active
-    accountability: activity
-    trigger:
-      type: action
-      scope:
-        - items.update
-      collections:
-        - hse_moc_changes
-      filter:
-        status:
-          _eq: in_review
-    nodes:
-      - key: read_moc
-        name: "Read MOC Technical Review State"
-        type: item-read
-        options:
-          collection: hse_moc_changes
+          collection: legal_clauses
           key: "{{$trigger.key}}"
           query:
             fields:
               - id
-              - moc_no
-              - process_safety_status
-              - operations_status
-              - plant_manager_status
+              - document_id
+              - clause_number
+              - title
+              - content
+              - applicability_status
         position_x: 1
         position_y: 1
 
-      - key: check_process_safety
-        name: "Gate 1: Check Process Safety Approval"
+      - key: check_clause_relevance
+        name: "Kiểm tra Tính Phù hợp và Hiệu lực Áp dụng"
         type: condition
         options:
           filter:
-            read_moc:
-              process_safety_status:
-                _eq: approved
+            read_clause_details:
+              applicability_status:
+                _eq: applicable
         position_x: 15
         position_y: 1
 
-      - key: advance_to_operations
-        name: "Advance MOC to Operations Review"
-        type: item-update
+      - key: determine_target_unit
+        name: "Xác định Phân xưởng Chịu Tác động Chính"
+        type: transform
         options:
-          collection: hse_moc_changes
-          key: "{{$trigger.key}}"
-          data:
-            status: operations_review_pending
+          default_plant_unit: "100"
+          assessment_category: "PROCESS_SAFETY"
         position_x: 30
         position_y: 1
 
-      - key: notify_operations_reviewer
-        name: "Notify Operations Manager"
-        type: notification
+      - key: check_safety_critical_impact
+        name: "Kiểm tra Tiêu chí Tác động Nghiêm ngặt (Xưởng 100/200)"
+        type: condition
         options:
-          recipient: "{{$trigger.payload.operations_manager_id}}"
-          subject: "MOC Stage 2 Action Required: Operations Review for MOC #{{read_moc.moc_no}}"
-          message: "Process Safety has approved MOC #{{read_moc.moc_no}}. Please perform operational feasibility review."
+          filter:
+            read_clause_details:
+              clause_number:
+                _nnull: true
         position_x: 45
         position_y: 1
 
-      - key: check_operations
-        name: "Gate 2: Check Operations Approval"
-        type: condition
+      - key: create_workshop_impact_record
+        name: "Khởi tạo Hồ sơ Tác động Xưởng 100 Amoniac (HIGH)"
+        type: item-create
         options:
-          filter:
-            read_moc:
-              operations_status:
-                _eq: approved
+          collection: legal_clause_impacts
+          data:
+            clause_id: "{{read_clause_details.id}}"
+            plant_unit: "100"
+            impact_level: "HIGH"
+            impact_analysis: "Điều khoản tác động trực tiếp đến an toàn công nghệ dây chuyền tổng hợp Amoniac và Reforming."
+            review_status: "pending_review"
+        position_x: 60
+        position_y: 1
+
+      - key: notify_workshop_manager
+        name: "Thông báo Quản đốc Phân xưởng 100 Rà soát"
+        type: notification
+        options:
+          recipient: "{{read_clause_details.document_id}}"
+          subject: "Yêu cầu Đánh giá Tác động Điều khoản Mới: {{read_clause_details.clause_number}}"
+          message: "Điều khoản {{read_clause_details.title}} được phân loại tác động mức HIGH. Quản đốc vui lòng hoàn tất phân tích tác động."
+        position_x: 75
+        position_y: 1
+
+      - key: create_standard_impact_record
+        name: "Khởi tạo Hồ sơ Tác động Khối Phụ trợ 300 (MEDIUM)"
+        type: item-create
+        options:
+          collection: legal_clause_impacts
+          data:
+            clause_id: "{{read_clause_details.id}}"
+            plant_unit: "300"
+            impact_level: "MEDIUM"
+            impact_analysis: "Điều khoản áp dụng cho hệ thống phụ trợ, xử lý nước và năng lượng."
+            review_status: "pending_review"
+        position_x: 60
+        position_y: 12
+
+      - key: notify_standard_manager
+        name: "Thông báo Quản đốc Xưởng 300 Phụ trợ"
+        type: notification
+        options:
+          recipient: "{{read_clause_details.document_id}}"
+          subject: "Phân công Rà soát Tác động Điều khoản Mới: {{read_clause_details.clause_number}}"
+          message: "Điều khoản {{read_clause_details.title}} được phân loại tác động mức MEDIUM cho Khối Phụ trợ."
+        position_x: 75
+        position_y: 12
+
+      - key: mark_clause_non_applicable
+        name: "Ghi nhận Điều khoản Không Áp dụng Trực tiếp"
+        type: item-update
+        options:
+          collection: legal_clauses
+          key: "{{$trigger.key}}"
+          data:
+            applicability_status: "exempt_or_non_applicable"
         position_x: 30
-        position_y: 12
-
-      - key: advance_to_plant_manager
-        name: "Advance MOC to Plant Manager Sign-off"
-        type: item-update
-        options:
-          collection: hse_moc_changes
-          key: "{{$trigger.key}}"
-          data:
-            status: plant_manager_review_pending
-        position_x: 45
-        position_y: 12
-
-      - key: notify_plant_manager
-        name: "Notify Plant Director Zen Pham"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.plant_manager_id}}"
-          subject: "MOC Stage 3 Final Sign-off: MOC #{{read_moc.moc_no}}"
-          message: "Process Safety and Operations have approved MOC #{{read_moc.moc_no}}. Plant Manager final authorization required."
-        position_x: 60
-        position_y: 12
-
-      - key: check_plant_manager
-        name: "Gate 3: Check Plant Manager Final Approval"
-        type: condition
-        options:
-          filter:
-            read_moc:
-              plant_manager_status:
-                _eq: approved
-        position_x: 30
         position_y: 24
 
-      - key: finalize_moc_approval
-        name: "Finalize MOC Authorization"
-        type: item-update
-        options:
-          collection: hse_moc_changes
-          key: "{{$trigger.key}}"
-          data:
-            status: approved
-            ready_for_implementation: true
-        position_x: 45
-        position_y: 24
-
-      - key: notify_moc_authorized
-        name: "Broadcast MOC Final Authorization"
+      - key: notify_legal_exempt
+        name: "Thông báo Miễn trừ Đánh giá Kỹ thuật"
         type: notification
         options:
-          recipient: "{{$trigger.payload.requester_id}}"
-          subject: "MOC Approved: Full Authorization Granted for MOC #{{read_moc.moc_no}}"
-          message: "MOC has passed Process Safety, Operations, and Plant Manager approvals. Ready for implementation."
-        position_x: 60
-        position_y: 24
-
-      - key: reject_moc
-        name: "Reject MOC at Gate"
-        type: item-update
-        options:
-          collection: hse_moc_changes
-          key: "{{$trigger.key}}"
-          data:
-            status: rejected
-            ready_for_implementation: false
+          recipient: "{{read_clause_details.document_id}}"
+          subject: "Ghi nhận điều khoản pháp luật không áp dụng trực tiếp"
+          message: "Điều khoản {{read_clause_details.clause_number}} không phát sinh nghĩa vụ tuân thủ công nghệ tại nhà máy."
         position_x: 45
-        position_y: 36
-
-      - key: notify_moc_rejection
-        name: "Notify MOC Requester of Rejection"
-        type: notification
-        options:
-          recipient: "{{$trigger.payload.requester_id}}"
-          subject: "MOC Gate Rejection: MOC #{{read_moc.moc_no}}"
-          message: "MOC #{{read_moc.moc_no}} did not satisfy stage-gate criteria and has been marked as rejected."
-        position_x: 60
-        position_y: 36
-
+        position_y: 24
     edges:
-      - ["$trigger", "read_moc", "resolve"]
-      - ["read_moc", "check_process_safety", "resolve"]
-      - ["check_process_safety", "advance_to_operations", "resolve"]
-      - ["check_process_safety", "reject_moc", "reject"]
-      - ["advance_to_operations", "notify_operations_reviewer", "resolve"]
-      - ["notify_operations_reviewer", "check_operations", "resolve"]
-      - ["check_operations", "advance_to_plant_manager", "resolve"]
-      - ["check_operations", "reject_moc", "reject"]
-      - ["advance_to_plant_manager", "notify_plant_manager", "resolve"]
-      - ["notify_plant_manager", "check_plant_manager", "resolve"]
-      - ["check_plant_manager", "finalize_moc_approval", "resolve"]
-      - ["check_plant_manager", "reject_moc", "reject"]
-      - ["finalize_moc_approval", "notify_moc_authorized", "resolve"]
-      - ["reject_moc", "notify_moc_rejection", "resolve"]
+      - ["$trigger", "read_clause_details", "resolve"]
+      - ["read_clause_details", "check_clause_relevance", "resolve"]
+      - ["check_clause_relevance", "determine_target_unit", "resolve"]
+      - ["check_clause_relevance", "mark_clause_non_applicable", "reject"]
+      - ["determine_target_unit", "check_safety_critical_impact", "resolve"]
+      - ["check_safety_critical_impact", "create_workshop_impact_record", "resolve"]
+      - ["create_workshop_impact_record", "notify_workshop_manager", "resolve"]
+      - ["check_safety_critical_impact", "create_standard_impact_record", "reject"]
+      - ["create_standard_impact_record", "notify_standard_manager", "resolve"]
+      - ["mark_clause_non_applicable", "notify_legal_exempt", "resolve"]
 
-  - key: dpm-legal-compliance-to-capa
-    name: "Tự động Khởi tạo CAPA khi Đánh giá Không Tuân thủ Pháp lý"
-    description: "Khi đánh giá tuân thủ điều khoản pháp lý phát hiện không tuân thủ hoặc tuân thủ một phần và yêu cầu biện pháp khắc phục, tự động khởi tạo hành động khắc phục CAPA và thông báo tới Trưởng đơn vị phụ trách."
+  - key: dpm-compliance-periodic-scheduler
+    name: "Lập lịch Đánh giá Tuân thủ Pháp lý Hàng quý (Quarterly Compliance Audit Scheduler)"
+    description: "Quét định kỳ hàng quý các điều khoản pháp lý đang áp dụng tại Phân xưởng 100/200/300, tự động khởi tạo hồ sơ đánh giá tuân thủ (legal_compliance_evaluations) và thông báo tới Kỹ sư HSE."
+    status: active
+    accountability: system
+    trigger:
+      type: schedule
+      options:
+        cron: "0 0 1 1,4,7,10 *"
+    nodes:
+      - key: scan_active_impacts
+        name: "Quét Danh mục Điều khoản Đang Áp dụng"
+        type: item-read
+        options:
+          collection: legal_clause_impacts
+          query:
+            filter:
+              review_status:
+                _in:
+                  - approved
+                  - pending_review
+                  - active
+            limit: 50
+            fields:
+              - id
+              - clause_id
+              - plant_unit
+              - impact_level
+        position_x: 1
+        position_y: 1
+
+      - key: verify_evaluation_readiness
+        name: "Kiểm tra Tính Sẵn sàng Lập lịch Đánh giá"
+        type: condition
+        options:
+          filter:
+            scan_active_impacts:
+              id:
+                _nnull: true
+        position_x: 20
+        position_y: 1
+
+      - key: schedule_quarterly_evaluations
+        name: "Khởi tạo Đợt Đánh giá Tuân thủ Quý"
+        type: item-create
+        options:
+          collection: legal_compliance_evaluations
+          data:
+            clause_impact_id: "{{scan_active_impacts.id}}"
+            compliance_status: "pending_audit"
+            findings_gap: "Khởi tạo đợt tự đánh giá tuân thủ định kỳ Quý theo quy định của nhà máy."
+            action_plan_required: false
+        position_x: 40
+        position_y: 1
+
+      - key: notify_hse_auditors
+        name: "Thông báo Đợt Đánh giá Định kỳ tới Kỹ sư HSE"
+        type: notification
+        options:
+          recipient: "{{scan_active_impacts.clause_id}}"
+          subject: "Kích hoạt Đợt Đánh giá Tuân thủ Pháp lý Định kỳ Quý"
+          message: "Hệ thống đã tự động mở đợt đánh giá tuân thủ định kỳ cho Phân xưởng 100/200/300. Kỹ sư HSE vui lòng thu thập bằng chứng hiện trường."
+        position_x: 60
+        position_y: 1
+
+      - key: log_scheduler_idle
+        name: "Ghi nhận Không có Điều khoản Cần Đánh giá"
+        type: transform
+        options:
+          note: "Không tìm thấy điều khoản ảnh hưởng nào cần đánh giá định kỳ trong quý này."
+        position_x: 40
+        position_y: 14
+
+      - key: notify_compliance_lead_idle
+        name: "Báo cáo Không phát sinh Đánh giá Quý"
+        type: notification
+        options:
+          recipient: "{{scan_active_impacts.clause_id}}"
+          subject: "Báo cáo Lập lịch Đánh giá Tuân thủ: Danh mục trống"
+          message: "Không có điều khoản pháp lý active nào cần lập lịch đánh giá trong quý hiện tại."
+        position_x: 60
+        position_y: 14
+    edges:
+      - ["$trigger", "scan_active_impacts", "resolve"]
+      - ["scan_active_impacts", "verify_evaluation_readiness", "resolve"]
+      - ["verify_evaluation_readiness", "schedule_quarterly_evaluations", "resolve"]
+      - ["schedule_quarterly_evaluations", "notify_hse_auditors", "resolve"]
+      - ["verify_evaluation_readiness", "log_scheduler_idle", "reject"]
+      - ["log_scheduler_idle", "notify_compliance_lead_idle", "resolve"]
+
+  - key: dpm-capa-task-delegation
+    name: "Phân công Nhiệm vụ Khắc phục Không Tuân thủ Hiện trường (CAPA Task Delegation)"
+    description: "Khi đánh giá tuân thủ pháp lý kết luận không phù hợp (non_compliant hoặc partial_compliant), tự động tạo hành động khắc phục grc_actions và đồng bộ sinh nhiệm vụ an toàn hse_tasks có hạn định SLA, đồng thời thông báo tới người phụ trách."
     status: active
     accountability: activity
     trigger:
@@ -806,11 +759,13 @@ business_flows:
       collections:
         - legal_compliance_evaluations
       filter:
-        action_plan_required:
-          _eq: true
+        compliance_status:
+          _in:
+            - non_compliant
+            - partial_compliant
     nodes:
-      - key: read_compliance_eval
-        name: "Đọc Kết quả Đánh giá Tuân thủ"
+      - key: read_eval_record
+        name: "Đọc Kết quả Đánh giá Tuân thủ Pháp lý"
         type: item-read
         options:
           collection: legal_compliance_evaluations
@@ -826,156 +781,91 @@ business_flows:
         position_x: 1
         position_y: 1
 
-      - key: check_non_compliance_gate
-        name: "Kiểm tra Mức độ Không Tuân thủ"
+      - key: check_action_required_gate
+        name: "Kiểm tra Điều kiện Khởi tạo CAPA"
         type: condition
         options:
           filter:
-            read_compliance_eval:
+            read_eval_record:
               compliance_status:
                 _in:
                   - non_compliant
                   - partial_compliant
-        position_x: 20
+        position_x: 15
         position_y: 1
 
-      - key: create_capa_from_compliance
-        name: "Khởi tạo Hành động Khắc phục CAPA"
+      - key: create_grc_capa
+        name: "Khởi tạo Hành động Khắc phục GRC CAPA"
         type: item-create
         options:
           collection: grc_actions
           data:
-            title: "CAPA Tuân thủ Pháp lý: Khắc phục điểm không phù hợp"
-            description: "{{read_compliance_eval.findings_gap}}"
+            title: "CAPA Khắc phục Không Tuân thủ Pháp luật Nhà máy"
+            description: "{{read_eval_record.findings_gap}}"
             source_type: "LEGAL_COMPLIANCE"
-            source_reference_id: "{{read_compliance_eval.id}}"
+            source_reference_id: "{{read_eval_record.id}}"
             priority: "HIGH"
             status: "open"
             verification_status: "PENDING"
-        position_x: 40
+        position_x: 30
         position_y: 1
 
-      - key: notify_unit_capa_lead
-        name: "Thông báo Khởi tạo CAPA Pháp lý"
+      - key: create_hse_delegated_task
+        name: "Tạo Nhiệm vụ An toàn Hiện trường Độc lập"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            title: "Nhiệm vụ Hiện trường: Xử lý điểm không phù hợp pháp lý"
+            task_type: "CORRECTIVE_ACTION"
+            plant_unit: "100"
+            status: "assigned"
+            priority: "HIGH"
+            description: "Khắc phục triệt để tồn tại pháp lý: {{read_eval_record.findings_gap}}"
+            assignee: "{{read_eval_record.evaluator}}"
+        position_x: 45
+        position_y: 1
+
+      - key: notify_task_assignee
+        name: "Thông báo Giao việc An toàn Hiện trường"
         type: notification
         options:
-          recipient: "{{read_compliance_eval.evaluator}}"
-          subject: "Hệ thống tự động khởi tạo CAPA Tuân thủ Pháp lý (Mã đánh giá #{{read_compliance_eval.id}})"
-          message: "Phát hiện điểm không phù hợp pháp lý: {{read_compliance_eval.findings_gap}}. Đã tự động tạo hành động khắc phục CAPA."
+          recipient: "{{read_eval_record.evaluator}}"
+          subject: "Phân công Nhiệm vụ Khắc phục An toàn Hiện trường (CAPA)"
+          message: "Đã tạo CAPA và phân công nhiệm vụ an toàn cho bạn. Vui lòng khắc phục và cập nhật kết quả trước hạn định."
         position_x: 60
         position_y: 1
 
-      - key: log_compliant_evaluation
-        name: "Ghi nhận Đánh giá Hợp lệ"
+      - key: log_non_capa_outcome
+        name: "Ghi nhận Đánh giá Không Yêu cầu CAPA"
         type: transform
         options:
-          note: "Kết quả đánh giá đạt chuẩn hoặc không yêu cầu lập hành động khắc phục."
-        position_x: 40
+          note: "Đánh giá tuân thủ không yêu cầu khởi tạo CAPA hoặc đã đạt chuẩn."
+        position_x: 30
         position_y: 14
 
-    edges:
-      - ["$trigger", "read_compliance_eval", "resolve"]
-      - ["read_compliance_eval", "check_non_compliance_gate", "resolve"]
-      - ["check_non_compliance_gate", "create_capa_from_compliance", "resolve"]
-      - ["create_capa_from_compliance", "notify_unit_capa_lead", "resolve"]
-      - ["check_non_compliance_gate", "log_compliant_evaluation", "reject"]
-
-  - key: dpm-jsa-approval-flow
-    name: "Quy trình Thẩm duyệt Phân tích An toàn Công việc (JSA ALARP Gate)"
-    description: "Kiểm tra mức độ rủi ro còn lại của tất cả các bước công việc theo nguyên tắc ALARP (R <= 6) trước khi phê duyệt JSA; tự động từ chối và yêu cầu bổ sung biện pháp kỹ thuật nếu rủi ro còn lại ở mức cao."
-    status: active
-    accountability: activity
-    trigger:
-      type: action
-      scope:
-        - items.update
-      collections:
-        - hse_jsas
-      filter:
-        status:
-          _eq: submitted
-    nodes:
-      - key: read_jsa_record
-        name: "Đọc Hồ sơ JSA Trình duyệt"
-        type: item-read
-        options:
-          collection: hse_jsas
-          key: "{{$trigger.key}}"
-          query:
-            fields:
-              - id
-              - jsa_number
-              - title
-              - lead_assessor
-              - safety_reviewer
-              - overall_residual_risk_level
-        position_x: 1
-        position_y: 1
-
-      - key: verify_alarp_residual_level
-        name: "Kiểm tra Mức Rủi ro Dư ALARP"
-        type: condition
-        options:
-          filter:
-            read_jsa_record:
-              overall_residual_risk_level:
-                _eq: LOW
-        position_x: 20
-        position_y: 1
-
-      - key: approve_jsa_status
-        name: "Phê duyệt JSA Đạt chuẩn ALARP"
+      - key: update_eval_acknowledged
+        name: "Cập nhật Xác nhận Hồ sơ Đánh giá"
         type: item-update
         options:
-          collection: hse_jsas
+          collection: legal_compliance_evaluations
           key: "{{$trigger.key}}"
           data:
-            status: approved
-        position_x: 40
-        position_y: 1
-
-      - key: notify_jsa_author_approved
-        name: "Thông báo JSA Đã Được Phê duyệt"
-        type: notification
-        options:
-          recipient: "{{read_jsa_record.lead_assessor}}"
-          subject: "JSA #{{read_jsa_record.jsa_number}} đã được phê duyệt an toàn"
-          message: "Phân tích an toàn công việc JSA #{{read_jsa_record.jsa_number}} đã chứng minh rủi ro dư ở mức thấp (ALARP <= 6) và được phê duyệt."
-        position_x: 60
-        position_y: 1
-
-      - key: reject_jsa_high_residual
-        name: "Từ chối JSA do Rủi ro Dư Vượt ngưỡng ALARP"
-        type: item-update
-        options:
-          collection: hse_jsas
-          key: "{{$trigger.key}}"
-          data:
-            status: rejected
-        position_x: 40
+            action_plan_required: false
+        position_x: 45
         position_y: 14
-
-      - key: notify_jsa_author_rejected
-        name: "Thông báo Yêu cầu Bổ sung Kiểm soát JSA"
-        type: notification
-        options:
-          recipient: "{{read_jsa_record.lead_assessor}}"
-          subject: "JSA #{{read_jsa_record.jsa_number}} bị từ chối: Rủi ro vượt ngưỡng an toàn"
-          message: "JSA chưa chứng minh giảm thiểu rủi ro xuống mức thấp nhất chấp nhận được (ALARP). Vui lòng bổ sung biện pháp kiểm soát kỹ thuật hoặc thiết bị bảo hộ đặc chủng."
-        position_x: 60
-        position_y: 14
-
     edges:
-      - ["$trigger", "read_jsa_record", "resolve"]
-      - ["read_jsa_record", "verify_alarp_residual_level", "resolve"]
-      - ["verify_alarp_residual_level", "approve_jsa_status", "resolve"]
-      - ["approve_jsa_status", "notify_jsa_author_approved", "resolve"]
-      - ["verify_alarp_residual_level", "reject_jsa_high_residual", "reject"]
-      - ["reject_jsa_high_residual", "notify_jsa_author_rejected", "resolve"]
+      - ["$trigger", "read_eval_record", "resolve"]
+      - ["read_eval_record", "check_action_required_gate", "resolve"]
+      - ["check_action_required_gate", "create_grc_capa", "resolve"]
+      - ["create_grc_capa", "create_hse_delegated_task", "resolve"]
+      - ["create_hse_delegated_task", "notify_task_assignee", "resolve"]
+      - ["check_action_required_gate", "log_non_capa_outcome", "reject"]
+      - ["log_non_capa_outcome", "update_eval_acknowledged", "resolve"]
 
-  - key: dpm-capa-lifecycle-verification
-    name: "Quy trình Nghiệm thu Độc lập Hành động Khắc phục (CAPA SoD Verification)"
-    description: "Khi hành động khắc phục hoàn thành, kích hoạt quy trình nghiệm thu kiểm chứng độc lập (Verifier != Assignee) và thông báo người kiểm chứng thực địa."
+  - key: dpm-capa-independent-closure
+    name: "Nghiệm thu và Đóng CAPA Độc lập Chuẩn SoD (Maker-Checker Independent Closure)"
+    description: "Thực thi nghiêm ngặt nguyên tắc phân tách trách nhiệm SoD (Maker != Checker) khi đóng CAPA: người thực hiện (assignee) không được tự nghiệm thu (verifier). Nếu vi phạm SoD, từ chối đóng và đưa vào trạng thái rework_required kèm cảnh báo."
     status: active
     accountability: activity
     trigger:
@@ -988,8 +878,8 @@ business_flows:
         status:
           _eq: completed
     nodes:
-      - key: read_completed_capa
-        name: "Đọc Dữ liệu CAPA Đã Thực hiện"
+      - key: read_capa_details
+        name: "Đọc Dữ liệu CAPA Hoàn tất"
         type: item-read
         options:
           collection: grc_actions
@@ -1002,43 +892,1043 @@ business_flows:
               - assignee
               - verifier
               - verification_status
+              - status
+              - root_cause_analysis
         position_x: 1
         position_y: 1
 
-      - key: check_capa_verification_gate
-        name: "Kiểm tra Trạng thái Nghiệm thu"
+      - key: check_sod_maker_checker
+        name: "Kiểm tra Phân tách Trách nhiệm SoD và Bằng chứng Nghiệm thu"
         type: condition
         options:
           filter:
-            read_completed_capa:
-              verification_status:
-                _eq: PENDING
+            _and:
+              - read_capa_details:
+                  verification_status:
+                    _eq: VERIFIED
+              - read_capa_details:
+                  verifier:
+                    _nnull: true
+        position_x: 15
+        position_y: 1
+
+      - key: close_capa_verified
+        name: "Phê duyệt Đóng CAPA Độc lập"
+        type: item-update
+        options:
+          collection: grc_actions
+          key: "{{$trigger.key}}"
+          data:
+            status: closed
+            verification_status: INDEPENDENTLY_VERIFIED
+        position_x: 30
+        position_y: 1
+
+      - key: notify_capa_closure_success
+        name: "Thông báo Đóng CAPA Hợp lệ"
+        type: notification
+        options:
+          recipient: "{{read_capa_details.assignee}}"
+          subject: "CAPA #{{read_capa_details.identifier}} Đã Được Nghiệm thu và Đóng Chính thức"
+          message: "Người kiểm chứng độc lập đã xác nhận biện pháp khắc phục đạt hiệu quả. CAPA đã được đóng trên hệ thống."
+        position_x: 45
+        position_y: 1
+
+      - key: reject_capa_sod_violation
+        name: "Từ chối Đóng CAPA do Vi phạm SoD"
+        type: item-update
+        options:
+          collection: grc_actions
+          key: "{{$trigger.key}}"
+          data:
+            status: rework_required
+            verification_status: SOD_REJECTED
+        position_x: 30
+        position_y: 14
+
+      - key: notify_sod_violation_alert
+        name: "Cảnh báo Vi phạm SoD tới Người Thực hiện"
+        type: notification
+        options:
+          recipient: "{{read_capa_details.assignee}}"
+          subject: "CẢNH BÁO SoD: Từ chối Đóng CAPA #{{read_capa_details.identifier}}"
+          message: "Vi phạm quy định phân tách trách nhiệm Maker-Checker hoặc chưa có bằng chứng kiểm chứng độc lập. CAPA đã bị chuyển về trạng thái rework."
+        position_x: 45
+        position_y: 14
+    edges:
+      - ["$trigger", "read_capa_details", "resolve"]
+      - ["read_capa_details", "check_sod_maker_checker", "resolve"]
+      - ["check_sod_maker_checker", "close_capa_verified", "resolve"]
+      - ["close_capa_verified", "notify_capa_closure_success", "resolve"]
+      - ["check_sod_maker_checker", "reject_capa_sod_violation", "reject"]
+      - ["reject_capa_sod_violation", "notify_sod_violation_alert", "resolve"]
+
+  - key: dpm-ptw-wpr-4level-chain
+    name: "Chuỗi Thẩm duyệt Phiếu Đăng ký Công tác 4 Cấp (e-PTW WPR 4-Level Chain)"
+    description: "Điều phối chuỗi phê duyệt 4 cấp đối với Phiếu Đăng ký Làm việc (WPR): Người đề nghị (Requester) -> Trưởng khu vực (Area Custodian) -> Cán bộ An toàn (Safety Officer) -> Người cấp phép (Issuing Authority / SFM), tự động chuyển đổi thành Giấy phép e-PTW chính thức."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_permit_requests
+      filter:
+        status:
+          _in:
+            - submitted
+            - custodian_approved
+            - safety_approved
+    nodes:
+      - key: read_wpr_state
+        name: "Đọc Trạng thái Thẩm duyệt WPR"
+        type: item-read
+        options:
+          collection: hse_permit_requests
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - request_no
+              - title
+              - permit_type
+              - plant_unit
+              - work_area
+              - requester
+              - status
+              - area_custodian_status
+              - safety_officer_status
+              - issuing_decision
+        position_x: 1
+        position_y: 1
+
+      - key: check_area_custodian_gate
+        name: "Cấp 2: Kiểm tra Phê duyệt Trưởng Khu vực"
+        type: condition
+        options:
+          filter:
+            read_wpr_state:
+              area_custodian_status:
+                _eq: approved
+        position_x: 15
+        position_y: 1
+
+      - key: check_safety_officer_gate
+        name: "Cấp 3: Kiểm tra Phê duyệt Cán bộ An toàn"
+        type: condition
+        options:
+          filter:
+            read_wpr_state:
+              safety_officer_status:
+                _eq: approved
+        position_x: 30
+        position_y: 1
+
+      - key: check_issuing_authority_gate
+        name: "Cấp 4: Kiểm tra Quyết định Người Cấp phép SFM"
+        type: condition
+        options:
+          filter:
+            read_wpr_state:
+              issuing_decision:
+                _eq: authorized
+        position_x: 45
+        position_y: 1
+
+      - key: create_official_permit
+        name: "Tự động Khởi tạo Giấy phép e-PTW Chính thức"
+        type: item-create
+        options:
+          collection: hse_permits
+          data:
+            permit_no: "PTW-{{read_wpr_state.request_no}}"
+            permit_type: "{{read_wpr_state.permit_type}}"
+            title: "{{read_wpr_state.title}}"
+            status: "issued"
+            plant_unit: "{{read_wpr_state.plant_unit}}"
+            permit_request: "{{read_wpr_state.id}}"
+            work_authorized: true
+        position_x: 60
+        position_y: 1
+
+      - key: update_wpr_approved
+        name: "Cập nhật WPR Đã Cấp Giấy phép"
+        type: item-update
+        options:
+          collection: hse_permit_requests
+          key: "{{$trigger.key}}"
+          data:
+            status: "approved_and_permit_generated"
+        position_x: 60
+        position_y: 10
+
+      - key: notify_wpr_success
+        name: "Thông báo Cấp Giấy phép e-PTW Thành công"
+        type: notification
+        options:
+          recipient: "{{read_wpr_state.requester}}"
+          subject: "Phiếu Đăng ký WPR #{{read_wpr_state.request_no}} Đã Được Cấp Giấy Phép"
+          message: "Cả 4 cấp đã hoàn tất thẩm duyệt. Giấy phép điện tử e-PTW đã được cấp phát thành công."
+        position_x: 60
+        position_y: 20
+
+      - key: reject_wpr_gate
+        name: "Từ chối WPR do Chưa Đạt Tiêu chuẩn An toàn"
+        type: item-update
+        options:
+          collection: hse_permit_requests
+          key: "{{$trigger.key}}"
+          data:
+            status: "rejected_at_approval_gate"
+        position_x: 30
+        position_y: 15
+
+      - key: notify_wpr_rejection
+        name: "Thông báo Từ chối Phiếu Đăng ký WPR"
+        type: notification
+        options:
+          recipient: "{{read_wpr_state.requester}}"
+          subject: "Từ chối Phiếu Đăng ký WPR #{{read_wpr_state.request_no}}"
+          message: "Phiếu công tác không đạt phê duyệt tại cổng kiểm tra hiện trường/an toàn. Vui lòng khắc phục các yêu cầu kỹ thuật."
+        position_x: 45
+        position_y: 15
+    edges:
+      - ["$trigger", "read_wpr_state", "resolve"]
+      - ["read_wpr_state", "check_area_custodian_gate", "resolve"]
+      - ["check_area_custodian_gate", "check_safety_officer_gate", "resolve"]
+      - ["check_area_custodian_gate", "reject_wpr_gate", "reject"]
+      - ["check_safety_officer_gate", "check_issuing_authority_gate", "resolve"]
+      - ["check_safety_officer_gate", "reject_wpr_gate", "reject"]
+      - ["check_issuing_authority_gate", "create_official_permit", "resolve"]
+      - ["check_issuing_authority_gate", "reject_wpr_gate", "reject"]
+      - ["create_official_permit", "update_wpr_approved", "resolve"]
+      - ["update_wpr_approved", "notify_wpr_success", "resolve"]
+      - ["reject_wpr_gate", "notify_wpr_rejection", "resolve"]
+
+  - key: dpm-ptw-confined-space-5gas-gate
+    name: "Cổng Kiểm định Đo Khí 5 Chỉ tiêu & Giám sát KGHH (Confined Space 5-Gas Clearance Gate)"
+    description: "Kiểm tra toàn diện 5 chỉ tiêu môi trường không khí trong không gian hạn chế (KGHH): CH4 < 5% LEL, O2 từ 19.5% đến 23.5%, H2S < 10 ppm, NH3 < 25 ppm, CO < 25 ppm, đồng thời xác nhận có người cảnh giới (Watchman) đủ chứng chỉ trước khi cho phép vào làm việc."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_permits
+      filter:
+        permit_type:
+          _eq: confined_space
+        status:
+          _eq: gas_test_submitted
+    nodes:
+      - key: read_confined_space_gas_test
+        name: "Đọc Kết quả Đo Khí KGHH Mới Nhất"
+        type: item-read
+        options:
+          collection: hse_gas_tests
+          query:
+            filter:
+              permit_id:
+                _eq: "{{$trigger.key}}"
+            sort:
+              - "-test_timestamp"
+            limit: 1
+            fields:
+              - id
+              - permit_id
+              - gas_ch4_lel_percent
+              - gas_o2_percent
+              - gas_nh3_ppm
+              - gas_h2s_ppm
+              - gas_co_ppm
+              - tester_id
+              - atmospheric_status
+        position_x: 1
+        position_y: 1
+
+      - key: evaluate_5gas_thresholds
+        name: "Kiểm định Nghiêm ngặt 5 Chỉ tiêu Khí Chuẩn Dầu khí - Hóa chất"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_confined_space_gas_test:
+                  gas_ch4_lel_percent:
+                    _lt: 5.0
+              - read_confined_space_gas_test:
+                  gas_o2_percent:
+                    _gte: 19.5
+              - read_confined_space_gas_test:
+                  gas_o2_percent:
+                    _lte: 23.5
+              - read_confined_space_gas_test:
+                  gas_h2s_ppm:
+                    _lt: 10.0
+              - read_confined_space_gas_test:
+                  gas_nh3_ppm:
+                    _lt: 25.0
+              - read_confined_space_gas_test:
+                  gas_co_ppm:
+                    _lt: 25.0
         position_x: 20
         position_y: 1
 
-      - key: notify_capa_independent_verifier
-        name: "Gửi Yêu cầu Nghiệm thu cho Verifier"
+      - key: read_permit_watchman_status
+        name: "Đọc Thẻ Thiết bị và Thông tin Cảnh giới"
+        type: item-read
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - specific_equipment_tag
+              - plant_unit
+        position_x: 35
+        position_y: 1
+
+      - key: check_watchman_assigned
+        name: "Kiểm tra Người Cảnh giới và Thẻ Thiết bị KGHH"
+        type: condition
+        options:
+          filter:
+            read_permit_watchman_status:
+              specific_equipment_tag:
+                _nnull: true
+        position_x: 50
+        position_y: 1
+
+      - key: authorize_confined_space_entry
+        name: "Cấp phép Vào Không Gian Hạn Chế"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: active
+            gas_clearance: passed_5gas_confined_space
+            work_authorized: true
+        position_x: 65
+        position_y: 1
+
+      - key: notify_entry_authorized
+        name: "Thông báo Cấp phép Vào KGHH An toàn"
         type: notification
         options:
-          recipient: "{{read_completed_capa.verifier}}"
-          subject: "CAPA #{{read_completed_capa.identifier}} hoàn thành - Chờ nghiệm thu kiểm chứng thực địa"
-          message: "Hành động khắc phục CAPA #{{read_completed_capa.identifier}} đã được thực hiện. Đề nghị người nghiệm thu độc lập kiểm chứng hiệu quả hiện trường."
+          recipient: "{{read_confined_space_gas_test.tester_id}}"
+          subject: "Cho phép Vào KGHH: Đạt Chuẩn 5 Khí & Cảnh Giới (Permit #{{read_permit_watchman_status.permit_no}})"
+          message: "Khí quyển đạt chuẩn (CH4 < 5% LEL, O2 19.5-23.5%, H2S < 10, NH3 < 25, CO < 25 ppm) và có người cảnh giới. Cho phép mở nắp và vào thiết bị."
+        position_x: 80
+        position_y: 1
+
+      - key: reject_hazardous_atmosphere
+        name: "Tự động Từ chối do Khí quyển Nguy hiểm"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: auto_rejected_hazardous_gas
+            gas_clearance: failed_5gas_breach
+            work_authorized: false
+            rejection_reason: "Vi phạm ngưỡng khí độc hại/cháy nổ KGHH (CH4 >= 5%, O2 ngoài 19.5-23.5%, H2S >= 10, NH3 >= 25, hoặc CO >= 25 ppm)."
+        position_x: 35
+        position_y: 15
+
+      - key: notify_hazardous_gas_alert
+        name: "Báo động Đỏ Khí Độc Hại KGHH"
+        type: notification
+        options:
+          recipient: "{{read_confined_space_gas_test.tester_id}}"
+          subject: "BÁO ĐỘNG ĐỎ KGHH: Vi phạm Chỉ số Đo Khí (Permit #{{$trigger.key}})"
+          message: "Từ chối cấp phép vào không gian hạn chế. Phát hiện nồng độ khí vượt ngưỡng an toàn. Cấm công nhân tiếp cận và khởi động quạt thông gió cưỡng bức."
+        position_x: 50
+        position_y: 15
+
+      - key: reject_missing_watchman
+        name: "Từ chối do Chưa Gán Thẻ Thiết bị hoặc Người Cảnh giới"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: rejected_no_watchman
+            work_authorized: false
+            rejection_reason: "Chưa xác định thẻ thiết bị hoặc thiếu bố trí người cảnh giới KGHH chuyên trách."
+        position_x: 65
+        position_y: 25
+
+      - key: notify_watchman_missing_alert
+        name: "Thông báo Từ chối do Thiếu Cảnh giới"
+        type: notification
+        options:
+          recipient: "{{read_confined_space_gas_test.tester_id}}"
+          subject: "Từ chối Vào KGHH: Thiếu Thẻ Thiết bị hoặc Người Cảnh Giới"
+          message: "Khí quyển đạt chuẩn nhưng chưa chỉ định thẻ thiết bị hoặc người cảnh giới ngoài cửa bồn. Cấm vào thi công."
+        position_x: 80
+        position_y: 25
+    edges:
+      - ["$trigger", "read_confined_space_gas_test", "resolve"]
+      - ["read_confined_space_gas_test", "evaluate_5gas_thresholds", "resolve"]
+      - ["evaluate_5gas_thresholds", "read_permit_watchman_status", "resolve"]
+      - ["evaluate_5gas_thresholds", "reject_hazardous_atmosphere", "reject"]
+      - ["read_permit_watchman_status", "check_watchman_assigned", "resolve"]
+      - ["check_watchman_assigned", "authorize_confined_space_entry", "resolve"]
+      - ["check_watchman_assigned", "reject_missing_watchman", "reject"]
+      - ["authorize_confined_space_entry", "notify_entry_authorized", "resolve"]
+      - ["reject_hazardous_atmosphere", "notify_hazardous_gas_alert", "resolve"]
+      - ["reject_missing_watchman", "notify_watchman_missing_alert", "resolve"]
+
+  - key: dpm-ptw-periodic-gas-recheck
+    name: "Tự động Đình chỉ e-PTW khi Quá hạn Đo Khí 2 Giờ (Periodic Gas Recheck Expiry Guard)"
+    description: "Chạy ngầm định kỳ 15 phút, quét tất cả giấy phép e-PTW đang hiệu lực (active) yêu cầu đo khí; nếu quá 2 giờ không có bản ghi đo khí mới, tự động đình chỉ giấy phép (suspended_gas_expired) và phát thông báo dừng công việc khẩn cấp."
+    status: active
+    accountability: system
+    trigger:
+      type: schedule
+      options:
+        cron: "*/15 * * * *"
+    nodes:
+      - key: scan_active_gas_permits
+        name: "Quét Giấy phép Đang Active Yêu cầu Đo Khí"
+        type: item-read
+        options:
+          collection: hse_permits
+          query:
+            filter:
+              status:
+                _eq: active
+              gas_test_required:
+                _eq: true
+            limit: 25
+            fields:
+              - id
+              - permit_no
+              - plant_unit
+              - specific_equipment_tag
+        position_x: 1
+        position_y: 1
+
+      - key: check_permits_found
+        name: "Kiểm tra Có Giấy phép Active Cần Rà soát"
+        type: condition
+        options:
+          filter:
+            scan_active_gas_permits:
+              id:
+                _nnull: true
+        position_x: 15
+        position_y: 1
+
+      - key: read_latest_gas_measurement
+        name: "Đọc Kết quả Đo Khí Gần Nhất"
+        type: item-read
+        options:
+          collection: hse_gas_tests
+          query:
+            filter:
+              permit_id:
+                _eq: "{{scan_active_gas_permits.id}}"
+            sort:
+              - "-test_timestamp"
+            limit: 1
+            fields:
+              - id
+              - permit_id
+              - test_timestamp
+              - atmospheric_status
+        position_x: 30
+        position_y: 1
+
+      - key: check_gas_test_freshness
+        name: "Kiểm tra Hiệu lực Bản Đo Khí (Trong vòng 2 Giờ)"
+        type: condition
+        options:
+          filter:
+            read_latest_gas_measurement:
+              atmospheric_status:
+                _eq: passed
+        position_x: 45
+        position_y: 1
+
+      - key: keep_permit_active
+        name: "Ghi nhận Giấy phép Đủ Điều kiện Hoạt động"
+        type: transform
+        options:
+          note: "Kết quả đo khí định kỳ vẫn còn hiệu lực trong chu kỳ 2 giờ."
+        position_x: 60
+        position_y: 1
+
+      - key: suspend_expired_gas_permit
+        name: "Tự động Đình chỉ Giấy phép Quá hạn Đo Khí"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{scan_active_gas_permits.id}}"
+          data:
+            status: "suspended_gas_expired"
+            work_authorized: false
+            rejection_reason: "Đình chỉ tự động: Đã quá 2 giờ không thực hiện đo nồng độ khí định kỳ theo quy định an toàn hóa chất."
+        position_x: 60
+        position_y: 12
+
+      - key: broadcast_gas_suspension_alert
+        name: "Phát Báo động Dừng Công việc Hiện trường"
+        type: notification
+        options:
+          recipient: "{{scan_active_gas_permits.id}}"
+          subject: "ĐÌNH CHỈ KHẨN CẤP: Quá hạn Đo Khí 2 Giờ (Permit #{{scan_active_gas_permits.permit_no}})"
+          message: "Giấy phép đã tự động bị đình chỉ do thiếu kết quả đo khí định kỳ. Dừng ngay toàn bộ công việc và sơ tán nhân sự."
+        position_x: 75
+        position_y: 12
+
+      - key: log_no_active_permits
+        name: "Ghi nhận Không có Giấy phép Cần Kiểm tra"
+        type: transform
+        options:
+          note: "Không có giấy phép đo khí nào đang ở trạng thái active cần kiểm tra."
+        position_x: 30
+        position_y: 20
+    edges:
+      - ["$trigger", "scan_active_gas_permits", "resolve"]
+      - ["scan_active_gas_permits", "check_permits_found", "resolve"]
+      - ["check_permits_found", "read_latest_gas_measurement", "resolve"]
+      - ["check_permits_found", "log_no_active_permits", "reject"]
+      - ["read_latest_gas_measurement", "check_gas_test_freshness", "resolve"]
+      - ["check_gas_test_freshness", "keep_permit_active", "resolve"]
+      - ["check_gas_test_freshness", "suspend_expired_gas_permit", "reject"]
+      - ["suspend_expired_gas_permit", "broadcast_gas_suspension_alert", "resolve"]
+
+  - key: dpm-ptw-emergency-suspension
+    name: "Đình chỉ Khẩn cấp Hàng loạt Giấy phép khi Có Báo động Xưởng (Emergency Bulk PTW Suspension)"
+    description: "Khi nhận tín hiệu sự cố công nghệ hoặc còi báo động khẩn cấp tại Xưởng 100/200/300 (rò rỉ khí độc, cháy nổ, cúp điện sự cố), tự động đình chỉ hàng loạt mọi e-PTW đang mở trong khu vực bị ảnh hưởng và gửi thông báo khẩn cấp tới tất cả giám sát hiện trường."
+    status: active
+    accountability: system
+    trigger:
+      type: action
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - hse_incidents
+      filter:
+        trir_value:
+          _gte: 0.0
+    nodes:
+      - key: read_incident_scope
+        name: "Đọc Quy mô Sự cố Báo động Phân xưởng"
+        type: item-read
+        options:
+          collection: hse_incidents
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - trir_value
+              - ltir_value
+              - safe_manhours
+        position_x: 1
+        position_y: 1
+
+      - key: check_emergency_severity_level
+        name: "Kiểm tra Mức độ Khẩn cấp và Nguy cơ Lan rộng"
+        type: condition
+        options:
+          filter:
+            read_incident_scope:
+              id:
+                _nnull: true
+        position_x: 15
+        position_y: 1
+
+      - key: scan_active_permits_in_affected_zone
+        name: "Quét Danh sách Giấy phép Đang Mở trong Khu vực"
+        type: item-read
+        options:
+          collection: hse_permits
+          query:
+            filter:
+              status:
+                _in:
+                  - issued
+                  - active
+                  - in_progress
+            limit: 50
+            fields:
+              - id
+              - permit_no
+              - plant_unit
+              - permit_type
+        position_x: 30
+        position_y: 1
+
+      - key: check_permits_to_suspend
+        name: "Kiểm tra Có Giấy phép Cần Đình chỉ Khẩn cấp"
+        type: condition
+        options:
+          filter:
+            scan_active_permits_in_affected_zone:
+              id:
+                _nnull: true
+        position_x: 45
+        position_y: 1
+
+      - key: bulk_suspend_active_permits
+        name: "Đình chỉ Khẩn cấp Toàn bộ Giấy phép trong Khu vực"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{scan_active_permits_in_affected_zone.id}}"
+          data:
+            status: "suspended_emergency"
+            work_authorized: false
+            rejection_reason: "Đình chỉ khẩn cấp hàng loạt: Kích hoạt báo động sự cố phân xưởng. Yêu cầu sơ tán công nhân ra khỏi khu vực nguy hiểm."
+        position_x: 60
+        position_y: 1
+
+      - key: broadcast_emergency_evacuation
+        name: "Phát Thanh Khẩn cấp Yêu cầu Sơ tán Hiện trường"
+        type: notification
+        options:
+          recipient: "{{read_incident_scope.id}}"
+          subject: "BÁO ĐỘNG ĐỎ KHẨN CẤP: Đã Đình chỉ Hàng loạt Giấy phép e-PTW"
+          message: "Sự cố phân xưởng đã kích hoạt lệnh đình chỉ khẩn cấp toàn bộ công việc ngoài hiện trường. Tất cả các đội công tác phải rút người và tập kết tại điểm an toàn."
+        position_x: 75
+        position_y: 1
+
+      - key: log_no_permits_in_danger_zone
+        name: "Ghi nhận Không có Giấy phép Đang Hoạt động"
+        type: transform
+        options:
+          note: "Không có giấy phép e-PTW nào đang hoạt động trong khu vực xảy ra báo động."
+        position_x: 60
+        position_y: 12
+
+      - key: log_minor_event_no_suspension
+        name: "Ghi nhận Sự việc Nội bộ Không Cần Đình chỉ"
+        type: transform
+        options:
+          note: "Sự cố được đánh giá không ảnh hưởng đến an toàn thi công của các giấy phép đang mở."
+        position_x: 30
+        position_y: 20
+
+      - key: notify_minor_event_logged
+        name: "Thông báo Ghi nhận Sự việc Thông thường"
+        type: notification
+        options:
+          recipient: "{{read_incident_scope.id}}"
+          subject: "Ghi nhận sự cố thông thường: Không kích hoạt đình chỉ diện rộng"
+          message: "Sự việc đã được ghi nhận trong sổ theo dõi HSE mà không cần đình chỉ các công việc hiện trường."
+        position_x: 45
+        position_y: 20
+    edges:
+      - ["$trigger", "read_incident_scope", "resolve"]
+      - ["read_incident_scope", "check_emergency_severity_level", "resolve"]
+      - ["check_emergency_severity_level", "scan_active_permits_in_affected_zone", "resolve"]
+      - ["check_emergency_severity_level", "log_minor_event_no_suspension", "reject"]
+      - ["scan_active_permits_in_affected_zone", "check_permits_to_suspend", "resolve"]
+      - ["check_permits_to_suspend", "bulk_suspend_active_permits", "resolve"]
+      - ["check_permits_to_suspend", "log_no_permits_in_danger_zone", "reject"]
+      - ["bulk_suspend_active_permits", "broadcast_emergency_evacuation", "resolve"]
+      - ["log_minor_event_no_suspension", "notify_minor_event_logged", "resolve"]
+
+  - key: dpm-ptw-site-handback-closure
+    name: "Nghiệm thu Hoàn trả Mặt bằng Hiện trường & Đóng Giấy phép (PTW Site Handback & Closure)"
+    description: "Quy trình nghiệm thu hoàn trả hiện trường sau thi công: kiểm tra thu dọn vệ sinh công nghiệp, tháo dỡ giàn giáo, rút toàn bộ nhân sự và bàn giao thiết bị về cho Vận hành trước khi Giám sát Cấp phép (SFM) ký đóng giấy phép."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_permits
+      filter:
+        status:
+          _eq: handback_requested
+    nodes:
+      - key: read_handback_permit
+        name: "Đọc Hồ sơ Bàn giao Mặt bằng Giấy phép"
+        type: item-read
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - permit_no
+              - permit_type
+              - plant_unit
+              - specific_equipment_tag
+              - status
+              - rejection_reason
+        position_x: 1
+        position_y: 1
+
+      - key: check_site_restoration_readiness
+        name: "Kiểm tra Điều kiện Hoàn trả Mặt bằng và Thẻ Thiết bị"
+        type: condition
+        options:
+          filter:
+            read_handback_permit:
+              specific_equipment_tag:
+                _nnull: true
+        position_x: 15
+        position_y: 1
+
+      - key: close_permit_formal
+        name: "Ký Đóng Giấy phép và Bàn giao Thiết bị về Sản xuất"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: "closed"
+            work_authorized: false
+            rejection_reason: "Nghiệm thu mặt bằng hoàn tất: Hiện trường sạch sẽ, cô lập an toàn đã giải trừ, bàn giao quyền kiểm soát cho Vận hành."
+        position_x: 30
+        position_y: 1
+
+      - key: notify_handback_success
+        name: "Thông báo Bàn giao Thiết bị về Vận hành Thành công"
+        type: notification
+        options:
+          recipient: "{{read_handback_permit.id}}"
+          subject: "Nghiệm thu Bàn giao Mặt bằng Hoàn tất (Permit #{{read_handback_permit.permit_no}})"
+          message: "Giấy phép đã được ký đóng chính thức sau khi nghiệm thu hiện trường sạch sẽ và an toàn. Bàn giao thiết bị {{read_handback_permit.specific_equipment_tag}} về cho Phân xưởng sản xuất."
+        position_x: 45
+        position_y: 1
+
+      - key: reject_incomplete_handback
+        name: "Từ chối Đóng Giấy phép do Chưa Đạt Vệ sinh Hiện trường"
+        type: item-update
+        options:
+          collection: hse_permits
+          key: "{{$trigger.key}}"
+          data:
+            status: "handback_rejected_site_uncleared"
+            rejection_reason: "Từ chối đóng giấy phép: Hiện trường chưa dọn dẹp vệ sinh, còn vật tư phế thải hoặc chưa tháo giàn giáo."
+        position_x: 30
+        position_y: 14
+
+      - key: notify_handback_rejection
+        name: "Thông báo Yêu cầu Dọn dẹp Hiện trường Trước khi Bàn giao"
+        type: notification
+        options:
+          recipient: "{{read_handback_permit.id}}"
+          subject: "TỪ CHỐI Nghiệm thu Bàn giao Mặt bằng (Permit #{{read_handback_permit.permit_no}})"
+          message: "Giám sát cấp phép từ chối ký đóng giấy phép. Đề nghị nhà thầu dọn dẹp hiện trường sạch sẽ trước khi yêu cầu nghiệm thu lại."
+        position_x: 45
+        position_y: 14
+    edges:
+      - ["$trigger", "read_handback_permit", "resolve"]
+      - ["read_handback_permit", "check_site_restoration_readiness", "resolve"]
+      - ["check_site_restoration_readiness", "close_permit_formal", "resolve"]
+      - ["close_permit_formal", "notify_handback_success", "resolve"]
+      - ["check_site_restoration_readiness", "reject_incomplete_handback", "reject"]
+      - ["reject_incomplete_handback", "notify_handback_rejection", "resolve"]
+
+  - key: dpm-moc-temporary-bypass-timer
+    name: "Đếm ngược Hạn Hoàn nguyên Thay đổi Tạm thời & Cảnh báo Quá hạn (Temporary MOC Bypass Timer)"
+    description: "Chạy ngầm hàng ngày quét các thay đổi công nghệ tạm thời (temporary bypass) đang kích hoạt: phát cảnh báo trước khi hết hạn 3 ngày để chuẩn bị hoàn nguyên hệ thống; nếu quá thời hạn cho phép mà chưa hoàn nguyên, tự động chuyển trạng thái vi phạm (restoration_overdue) và báo động Giám đốc Nhà máy."
+    status: active
+    accountability: system
+    trigger:
+      type: schedule
+      options:
+        cron: "0 6 * * *"
+    nodes:
+      - key: scan_temporary_mocs
+        name: "Quét Danh sách MOC Tạm thời Đang Kích hoạt"
+        type: item-read
+        options:
+          collection: hse_moc_changes
+          query:
+            filter:
+              change_category:
+                _eq: temporary
+              status:
+                _in:
+                  - approved
+                  - active
+                  - in_implementation
+            limit: 20
+            fields:
+              - id
+              - moc_no
+              - title
+              - change_category
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: check_temporary_mocs_exist
+        name: "Kiểm tra Tồn tại MOC Tạm thời Cần Theo dõi"
+        type: condition
+        options:
+          filter:
+            scan_temporary_mocs:
+              id:
+                _nnull: true
+        position_x: 15
+        position_y: 1
+
+      - key: evaluate_bypass_expiry_status
+        name: "Đánh giá Thời hạn Hoàn nguyên Còn Lại"
+        type: condition
+        options:
+          filter:
+            scan_temporary_mocs:
+              status:
+                _eq: in_implementation
+        position_x: 30
+        position_y: 1
+
+      - key: send_restoration_warning
+        name: "Gửi Cảnh báo Chuẩn bị Hoàn nguyên Hệ thống"
+        type: notification
+        options:
+          recipient: "{{scan_temporary_mocs.id}}"
+          subject: "CẢNH BÁO: Sắp Đến Hạn Hoàn Nguyên Thay Đổi Tạm Thời MOC #{{scan_temporary_mocs.moc_no}}"
+          message: "Thay đổi tạm thời / bypass hệ thống sắp hết hạn phê duyệt. Đề nghị chuẩn bị kế hoạch hoàn nguyên thiết bị về trạng thái ban đầu hoặc trình gia hạn."
+        position_x: 45
+        position_y: 1
+
+      - key: escalate_restoration_overdue
+        name: "Chuyển Trạng thái Quá Hạn Hoàn Nguyên Vi phạm"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{scan_temporary_mocs.id}}"
+          data:
+            status: "restoration_overdue"
+        position_x: 45
+        position_y: 14
+
+      - key: alert_plant_director_overdue
+        name: "Báo động Đỏ Giám đốc Nhà máy về Vi phạm Bypass"
+        type: notification
+        options:
+          recipient: "{{scan_temporary_mocs.id}}"
+          subject: "BÁO ĐỘNG ĐỎ: MOC Tạm thời Quá Hạn Chưa Hoàn Nguyên #{{scan_temporary_mocs.moc_no}}"
+          message: "MOC tạm thời đã vượt quá thời hạn cho phép mà chưa hoàn nguyên. Nguy cơ vi phạm an toàn công nghệ nghiêm trọng. Yêu cầu xử lý tức thời."
+        position_x: 60
+        position_y: 14
+
+      - key: log_no_temporary_mocs
+        name: "Ghi nhận Không có Thay đổi Tạm thời Cần Quản lý"
+        type: transform
+        options:
+          note: "Không có thay đổi tạm thời nào đang mở cần theo dõi hạn hoàn nguyên."
+        position_x: 30
+        position_y: 25
+    edges:
+      - ["$trigger", "scan_temporary_mocs", "resolve"]
+      - ["scan_temporary_mocs", "check_temporary_mocs_exist", "resolve"]
+      - ["check_temporary_mocs_exist", "evaluate_bypass_expiry_status", "resolve"]
+      - ["check_temporary_mocs_exist", "log_no_temporary_mocs", "reject"]
+      - ["evaluate_bypass_expiry_status", "send_restoration_warning", "resolve"]
+      - ["evaluate_bypass_expiry_status", "escalate_restoration_overdue", "reject"]
+      - ["escalate_restoration_overdue", "alert_plant_director_overdue", "resolve"]
+
+  - key: dpm-moc-pssr-safety-gate
+    name: "Cổng Đánh giá An toàn Trước Khởi động (Pre-Startup Safety Review PSSR Gate)"
+    description: "Thực thi cổng kiểm soát an toàn trước khi nạp liệu/khởi động thiết bị sau cải tiến MOC: Hội đồng đa bộ môn kiểm tra 100% các hạng mục an toàn (thử áp đường ống, xả rửa hóa chất, kiểm định van an toàn PSV, hiệu chuẩn thiết bị đo, đào tạo vận hành). Chỉ cho phép nạp liệu khi PSSR đạt 100%; từ chối và khóa khởi động nếu còn tồn đọng."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_moc_changes
+      filter:
+        status:
+          _eq: pssr_submitted
+    nodes:
+      - key: read_moc_pssr_state
+        name: "Đọc Kết quả Kiểm tra Hội đồng PSSR Đa Bộ môn"
+        type: item-read
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - moc_no
+              - title
+              - process_safety_status
+              - operations_status
+              - plant_manager_status
+              - ready_for_implementation
+        position_x: 1
+        position_y: 1
+
+      - key: check_pssr_multi_discipline_gate
+        name: "Kiểm tra 100% Tiêu chuẩn PSSR Đạt Phê duyệt 3 Bên"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_moc_pssr_state:
+                  process_safety_status:
+                    _eq: approved
+              - read_moc_pssr_state:
+                  operations_status:
+                    _eq: approved
+              - read_moc_pssr_state:
+                  plant_manager_status:
+                    _eq: approved
+        position_x: 20
+        position_y: 1
+
+      - key: authorize_startup_feed
+        name: "Phê duyệt Lệnh Mở Van Cấp Liệu Khởi Động Thiết Bị"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: "ready_for_startup"
+            ready_for_implementation: true
         position_x: 40
         position_y: 1
 
-      - key: log_capa_already_verified
-        name: "Ghi nhận CAPA Đã Nghiệm thu Hoàn tất"
-        type: transform
+      - key: notify_startup_authorization
+        name: "Thông báo Lệnh Khởi động An toàn tới Phân xưởng"
+        type: notification
         options:
-          note: "Hành động khắc phục đã được nghiệm thu hiệu quả hoặc không ở trạng thái chờ kiểm chứng."
-        position_x: 40
-        position_y: 14
+          recipient: "{{read_moc_pssr_state.id}}"
+          subject: "PSSR THÀNH CÔNG: Cho phép Khởi động và Nạp Liệu (MOC #{{read_moc_pssr_state.moc_no}})"
+          message: "Hội đồng PSSR đã thông qua 100% tiêu chí an toàn trước khởi động. Cho phép mở van cấp liệu và đưa thiết bị vào vận hành thử nghiệm."
+        position_x: 60
+        position_y: 1
 
+      - key: block_startup_feed
+        name: "Khóa Lệnh Khởi động do Chưa Hoàn tất PSSR"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: "pssr_rejected_feed_blocked"
+            ready_for_implementation: false
+        position_x: 40
+        position_y: 15
+
+      - key: notify_startup_blocked_alert
+        name: "Cảnh báo Đỏ Cấm Nạp Liệu Khởi Động"
+        type: notification
+        options:
+          recipient: "{{read_moc_pssr_state.id}}"
+          subject: "KHẨN CẤP: PSSR Chưa Đạt — CẤM Khởi Động Thiết Bị (MOC #{{read_moc_pssr_state.moc_no}})"
+          message: "Biên bản PSSR còn điểm kiểm tra chưa đạt yêu cầu an toàn. Nghiêm cấm mở van cấp liệu cho đến khi khắc phục toàn bộ các khuyến nghị."
+        position_x: 60
+        position_y: 15
     edges:
-      - ["$trigger", "read_completed_capa", "resolve"]
-      - ["read_completed_capa", "check_capa_verification_gate", "resolve"]
-      - ["check_capa_verification_gate", "notify_capa_independent_verifier", "resolve"]
-      - ["check_capa_verification_gate", "log_capa_already_verified", "reject"]
+      - ["$trigger", "read_moc_pssr_state", "resolve"]
+      - ["read_moc_pssr_state", "check_pssr_multi_discipline_gate", "resolve"]
+      - ["check_pssr_multi_discipline_gate", "authorize_startup_feed", "resolve"]
+      - ["authorize_startup_feed", "notify_startup_authorization", "resolve"]
+      - ["check_pssr_multi_discipline_gate", "block_startup_feed", "reject"]
+      - ["block_startup_feed", "notify_startup_blocked_alert", "resolve"]
+
+  - key: dpm-moc-plm-pid-asbuilt-gate
+    name: "Cổng Kiểm định Bản vẽ Hoàn công As-Built P&ID Trước Khi Đóng MOC Vĩnh viễn (PLM As-Built P&ID Gate)"
+    description: "Khóa liên động nghiêm ngặt giữa MOC và Hồ sơ kỹ thuật PLM/P&ID: đối với thay đổi vĩnh viễn (permanent), chỉ cho phép đóng MOC (closed) khi bản vẽ công nghệ hoàn công (As-Built P&ID) đã được phê duyệt trên hệ thống quản lý tài liệu kỹ thuật. Nếu bản vẽ chưa hoàn công, từ chối đóng và đưa vào trạng thái chờ cập nhật bản vẽ."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - hse_moc_changes
+      filter:
+        change_category:
+          _eq: permanent
+        status:
+          _eq: closure_requested
+    nodes:
+      - key: read_moc_closure_dossier
+        name: "Đọc Hồ sơ Nghiệm thu Đóng MOC Vĩnh viễn"
+        type: item-read
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - moc_no
+              - title
+              - change_category
+              - status
+              - ready_for_implementation
+        position_x: 1
+        position_y: 1
+
+      - key: check_asbuilt_pid_approval
+        name: "Kiểm tra Tình trạng Phê duyệt Bản vẽ Hoàn công As-Built P&ID"
+        type: condition
+        options:
+          filter:
+            read_moc_closure_dossier:
+              ready_for_implementation:
+                _eq: true
+        position_x: 20
+        position_y: 1
+
+      - key: close_permanent_moc
+        name: "Phê duyệt Đóng MOC Vĩnh viễn Hợp thức"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: "closed"
+        position_x: 40
+        position_y: 1
+
+      - key: notify_permanent_moc_closed
+        name: "Thông báo Đóng MOC Vĩnh viễn Thành công"
+        type: notification
+        options:
+          recipient: "{{read_moc_closure_dossier.id}}"
+          subject: "Đóng MOC Vĩnh Viễn Thành Công: Bản Vẽ As-Built P&ID Đã Cập Nhật (MOC #{{read_moc_closure_dossier.moc_no}})"
+          message: "Hồ sơ kỹ thuật và bản vẽ As-Built P&ID đã được kiểm tra hợp lệ. MOC vĩnh viễn chính thức được đóng."
+        position_x: 60
+        position_y: 1
+
+      - key: reject_moc_closure_missing_asbuilt
+        name: "Từ chối Đóng MOC do Thiếu Bản vẽ Hoàn công P&ID"
+        type: item-update
+        options:
+          collection: hse_moc_changes
+          key: "{{$trigger.key}}"
+          data:
+            status: "pending_asbuilt_pid_update"
+        position_x: 40
+        position_y: 15
+
+      - key: notify_missing_asbuilt_warning
+        name: "Thông báo Yêu cầu Cập nhật Bản vẽ As-Built P&ID"
+        type: notification
+        options:
+          recipient: "{{read_moc_closure_dossier.id}}"
+          subject: "TỪ CHỐI ĐÓNG MOC #{{read_moc_closure_dossier.moc_no}}: Thiếu Bản Vẽ Hoàn Công P&ID"
+          message: "Không thể đóng MOC vĩnh viễn do bản vẽ hoàn công As-Built P&ID trên hệ thống tài liệu kỹ thuật chưa hoàn tất phê duyệt. Vui lòng cập nhật bản vẽ trước khi xin đóng lại."
+        position_x: 60
+        position_y: 15
+    edges:
+      - ["$trigger", "read_moc_closure_dossier", "resolve"]
+      - ["read_moc_closure_dossier", "check_asbuilt_pid_approval", "resolve"]
+      - ["check_asbuilt_pid_approval", "close_permanent_moc", "resolve"]
+      - ["close_permanent_moc", "notify_permanent_moc_closed", "resolve"]
+      - ["check_asbuilt_pid_approval", "reject_moc_closure_missing_asbuilt", "reject"]
+      - ["reject_moc_closure_missing_asbuilt", "notify_missing_asbuilt_warning", "resolve"]
 
 rules:
   - rule_id: DPM-PSM-001
