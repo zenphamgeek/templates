@@ -449,6 +449,10 @@ taxonomy_and_fields:
       fields:
         - field: id
           type: uuid
+        - field: event_type
+          type: string
+        - field: status
+          type: string
         - field: trir_value
           type: float
         - field: ltir_value
@@ -877,6 +881,8 @@ business_flows:
       filter:
         status:
           _eq: completed
+        verifier:
+          _nnull: true
     nodes:
       - key: read_capa_details
         name: "Đọc Dữ liệu CAPA Hoàn tất"
@@ -1415,8 +1421,17 @@ business_flows:
       collections:
         - hse_incidents
       filter:
-        trir_value:
-          _gte: 0.0
+        _or:
+          - event_type:
+              _in:
+                - emergency_alarm
+                - major_incident
+                - toxic_gas_leak
+                - plant_emergency
+          - status:
+              _in:
+                - emergency_declared
+                - emergency_alarm
     nodes:
       - key: read_incident_scope
         name: "Đọc Quy mô Sự cố Báo động Phân xưởng"
@@ -1427,6 +1442,8 @@ business_flows:
           query:
             fields:
               - id
+              - event_type
+              - status
               - trir_value
               - ltir_value
               - safe_manhours
@@ -1438,9 +1455,19 @@ business_flows:
         type: condition
         options:
           filter:
-            read_incident_scope:
-              id:
-                _nnull: true
+            _or:
+              - read_incident_scope:
+                  event_type:
+                    _in:
+                      - emergency_alarm
+                      - major_incident
+                      - toxic_gas_leak
+                      - plant_emergency
+              - read_incident_scope:
+                  status:
+                    _in:
+                      - emergency_declared
+                      - emergency_alarm
         position_x: 15
         position_y: 1
 
@@ -1962,6 +1989,22 @@ rules:
     condition: "assignee != verifier"
     enforcement: strict_rejection
     action: "Reject self-verification of CAPA actions."
+
+  - rule_id: DPM-RBI-005
+    name: "API 581 RBI High-Pressure Carbamate Condenser Minimum Corrosion Allowance"
+    description: "Ammonia/Urea high-pressure carbamate condenser (102-C) tube bundle and shell wall thickness must retain corrosion allowance >= 1.5 mm per API 581 Risk-Based Inspection."
+    severity: critical
+    condition: "corrosion_allowance_remaining_mm >= 1.5"
+    enforcement: strict_rejection
+    action: "Mandate emergency eddy current inspection and derate urea synthesis loop operating pressure."
+
+  - rule_id: DPM-TURB-006
+    name: "API 670 Synthesis Gas Compressor Turbine Vibration & Overspeed Trip Interlock"
+    description: "Synthesis gas compressor steam turbine (103-J / 103-JT) overall vibration must remain <= 4.5 mm/s RMS per API 670 machinery protection systems standard."
+    severity: critical
+    condition: "vibration_mm_s <= 4.5"
+    enforcement: strict_rejection
+    action: "Trigger automatic turbine trip interlock and notify chief mechanical reliability engineer."
 
 insights:
   - name: "Ammonia Synthesis Unit (103-J Syngas Compressor) Live KPI Dashboard"

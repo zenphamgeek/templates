@@ -92,6 +92,12 @@ taxonomy_and_fields:
           type: string
         - field: date_tested
           type: date
+        - field: status
+          type: string
+        - field: mass_balance_discrepancy_pct
+          type: float
+        - field: linepack_m3
+          type: float
 
     - collection: ncsp_gas_metering
       name: "Gas Custody Transfer & Metering"
@@ -113,6 +119,8 @@ taxonomy_and_fields:
           type: float
         - field: h2s_content_ppm
           type: float
+        - field: status
+          type: string
 
     - collection: ncsp_ili_anomalies
       name: "Intelligent Pigging ILI Corrosion Features"
@@ -310,6 +318,52 @@ taxonomy_and_fields:
           type: string
         - field: deadline_hours
           type: integer
+
+    - collection: ncsp_cathodic_protection_rectifiers
+      name: "Cathodic Protection Transformer-Rectifiers"
+      description: "Transformer-rectifier telemetry, instant-off polarized potentials, and coating disbondment surveillance per ISO 15589-1."
+      fields:
+        - field: id
+          type: uuid
+        - field: rectifier_tag
+          type: string
+        - field: kp_location
+          type: float
+        - field: on_potential_mv_cse
+          type: float
+        - field: instant_off_potential_mv_cse
+          type: float
+        - field: output_current_amps
+          type: float
+        - field: coating_disbondment_risk
+          type: boolean
+        - field: status
+          type: string
+
+    - collection: ncsp_hca_class_assessments
+      name: "High Consequence Area (HCA) Class Location Assessments"
+      description: "ASME B31.8S Class Location population density surveys, design factor F re-evaluations, and hydrotest requalification records."
+      fields:
+        - field: id
+          type: uuid
+        - field: segment_id
+          type: string
+        - field: kp_start
+          type: float
+        - field: kp_end
+          type: float
+        - field: previous_class_location
+          type: integer
+        - field: current_class_location
+          type: integer
+        - field: dwelling_count_within_200m
+          type: integer
+        - field: design_factor_f
+          type: float
+        - field: requalification_method
+          type: string
+        - field: status
+          type: string
 
   relations:
     - collection: ncsp_pigging_runs
@@ -1120,6 +1174,475 @@ business_flows:
       - ["verify_pipeline_and_trap_integrity", "engage_pig_trap_safety_inhibit", "reject"]
       - ["engage_pig_trap_safety_inhibit", "notify_integrity_fault", "resolve"]
 
+  - key: ncsp-cp-iso15589-rectifier-potential-gate
+    name: "ISO 15589-1 Cathodic Protection (CP) Transformer-Rectifier Instant-Off Potential & Disbondment Gate"
+    description: "Evaluates Cathodic Protection transformer-rectifier polarized instant-off potentials per ISO 15589-1 / NACE SP0169. Verifies polarization remains between -850 mV and -1200 mV CSE. Resolves polarization compliance; rejects under-protection corrosion or over-protection coating disbondment, dispatching urgent field adjustment in hse_tasks."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_cathodic_protection_rectifiers
+      filter:
+        status:
+          _eq: survey_logged
+    nodes:
+      - key: read_rectifier_survey
+        name: "Read Cathodic Protection Rectifier Survey Telemetry"
+        type: item-read
+        options:
+          collection: ncsp_cathodic_protection_rectifiers
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - rectifier_tag
+              - kp_location
+              - on_potential_mv_cse
+              - instant_off_potential_mv_cse
+              - output_current_amps
+              - coating_disbondment_risk
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_polarization_window
+        name: "Verify ISO 15589-1 Polarized Instant-Off Potential (-850 to -1200 mV CSE)"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_rectifier_survey:
+                  instant_off_potential_mv_cse:
+                    _lte: -850.0
+              - read_rectifier_survey:
+                  instant_off_potential_mv_cse:
+                    _gte: -1200.0
+        position_x: 20
+        position_y: 1
+
+      - key: certify_cp_polarization
+        name: "Certify Cathodic Protection Polarization Compliance"
+        type: item-update
+        options:
+          collection: ncsp_cathodic_protection_rectifiers
+          key: "{{$trigger.key}}"
+          data:
+            status: polarized_compliant
+            coating_disbondment_risk: false
+        position_x: 40
+        position_y: 1
+
+      - key: notify_cp_compliant
+        name: "Notify Corrosion Team of Certified Polarization"
+        type: notification
+        options:
+          recipient: "CORROSION_INTEGRITY_ENGINEER"
+          subject: "ISO 15589-1 CP Verified: Rectifier {{read_rectifier_survey.rectifier_tag}} at KP {{read_rectifier_survey.kp_location}}"
+          message: "Polarized instant-off potential {{read_rectifier_survey.instant_off_potential_mv_cse}} mV CSE is within normative range (-850 to -1200 mV CSE). CP system fully compliant."
+        position_x: 60
+        position_y: 1
+
+      - key: flag_cp_polarization_fault
+        name: "Flag Polarization Fault & Coating Disbondment Risk"
+        type: item-update
+        options:
+          collection: ncsp_cathodic_protection_rectifiers
+          key: "{{$trigger.key}}"
+          data:
+            status: polarization_fault_alarm
+            coating_disbondment_risk: true
+        position_x: 40
+        position_y: 15
+
+      - key: create_cp_adjustment_task
+        name: "Dispatch Urgent Field Adjustment Task in HSE Tasks"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            task_title: "Urgent CP Rectifier Output Calibration - {{read_rectifier_survey.rectifier_tag}} at KP {{read_rectifier_survey.kp_location}}"
+            unit_tag: "{{read_rectifier_survey.rectifier_tag}}"
+            priority: critical
+            status: assigned
+            assigned_to: "Cathodic_Protection_Specialist"
+            deadline_hours: 12
+        position_x: 60
+        position_y: 15
+
+      - key: notify_cp_fault_alarm
+        name: "Alert Corrosion Superintendent of Polarization Breach"
+        type: notification
+        options:
+          recipient: "PIPELINE_CORROSION_SUPERINTENDENT"
+          subject: "CRITICAL CP FAULT: Rectifier {{read_rectifier_survey.rectifier_tag}} at KP {{read_rectifier_survey.kp_location}} Out of Spec"
+          message: "Instant-off potential {{read_rectifier_survey.instant_off_potential_mv_cse}} mV CSE violates ISO 15589-1 criteria. Potential under-protection (< -850 mV) or over-protection (> -1200 mV coating disbondment). Urgent CP field adjustment dispatched."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_rectifier_survey", "resolve"]
+      - ["read_rectifier_survey", "verify_polarization_window", "resolve"]
+      - ["verify_polarization_window", "certify_cp_polarization", "resolve"]
+      - ["certify_cp_polarization", "notify_cp_compliant", "resolve"]
+      - ["verify_polarization_window", "flag_cp_polarization_fault", "reject"]
+      - ["flag_cp_polarization_fault", "create_cp_adjustment_task", "resolve"]
+      - ["create_cp_adjustment_task", "notify_cp_fault_alarm", "resolve"]
+
+  - key: ncsp-gas-quality-aga8-wobbe-dewpoint-interlock
+    name: "AGA Report No. 8 / ISO 6976 Fiscal Gas Chromatograph Wobbe Index, H2S & Hydrocarbon Dew Point Interlock"
+    description: "Surveillance of online gas chromatography and dew point analyzers at custody transfer metering stations per AGA Report No. 8 and ISO 6976. Verifies H2S content <= 4.0 ppm and hydrocarbon dew point <= 0.0 C. Approves custody transfer nomination or interlocks off-spec gas diversion valve and logs CAPA in grc_actions."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_gas_metering
+      filter:
+        status:
+          _eq: chromatograph_sampled
+    nodes:
+      - key: read_chromatograph_telemetry
+        name: "Read Fiscal Gas Chromatograph & Moisture Analyzer Telemetry"
+        type: item-read
+        options:
+          collection: ncsp_gas_metering
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - station_name
+              - timestamp
+              - delivery_rate_mmscmd
+              - intake_pressure_bar
+              - temperature_c
+              - hydrocarbon_dew_point_c
+              - h2s_content_ppm
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: check_gas_quality_specs
+        name: "Verify AGA-8 / ISO 6976 H2S (<= 4.0 ppm) & Dew Point (<= 0.0 C)"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_chromatograph_telemetry:
+                  h2s_content_ppm:
+                    _lte: 4.0
+              - read_chromatograph_telemetry:
+                  hydrocarbon_dew_point_c:
+                    _lte: 0.0
+        position_x: 20
+        position_y: 1
+
+      - key: approve_custody_transfer
+        name: "Approve Custody Transfer Gas Nomination"
+        type: item-update
+        options:
+          collection: ncsp_gas_metering
+          key: "{{$trigger.key}}"
+          data:
+            status: custody_transfer_approved
+        position_x: 40
+        position_y: 1
+
+      - key: notify_custody_transfer_cleared
+        name: "Notify Gas Dispatch of On-Spec Custody Nomination"
+        type: notification
+        options:
+          recipient: "GAS_DISPATCH_SUPERINTENDENT"
+          subject: "AGA-8 / ISO 6976 Fiscal Gas Quality Nominal: Station {{read_chromatograph_telemetry.station_name}}"
+          message: "Fiscal gas quality at {{read_chromatograph_telemetry.station_name}} conforms to contract specs: H2S={{read_chromatograph_telemetry.h2s_content_ppm}} ppm <= 4.0, HCDP={{read_chromatograph_telemetry.hydrocarbon_dew_point_c}} C. Delivery approved."
+        position_x: 60
+        position_y: 1
+
+      - key: create_offspec_capa_action
+        name: "Log Off-Spec Gas Quality CAPA in GRC Actions"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "Off-Spec Gas Diversion Interlock - Station {{read_chromatograph_telemetry.station_name}}"
+            source_module: gas_metering_quality
+            action_category: process_safety
+            priority: critical
+            status: open
+            description: "Fiscal gas chromatograph detected off-spec gas at {{read_chromatograph_telemetry.station_name}}: H2S={{read_chromatograph_telemetry.h2s_content_ppm}} ppm (> 4.0 ppm) or Dew Point={{read_chromatograph_telemetry.hydrocarbon_dew_point_c}} C (> 0 C). Diversion interlock triggered per AGA-8/ISO-6976."
+        position_x: 40
+        position_y: 15
+
+      - key: interlock_diversion_valve
+        name: "Trigger SCADA Off-Spec Gas Diversion Valve Interlock"
+        type: item-update
+        options:
+          collection: ncsp_gas_metering
+          key: "{{$trigger.key}}"
+          data:
+            status: offspec_diverted_interlock
+        position_x: 60
+        position_y: 15
+
+      - key: notify_offspec_gas_alarm
+        name: "Broadcast Critical Off-Spec Gas Trip Alert"
+        type: notification
+        options:
+          recipient: "GAS_CONTROL_CENTER_CHIEF"
+          subject: "CRITICAL OFF-SPEC GAS INTERLOCK: Station {{read_chromatograph_telemetry.station_name}}"
+          message: "Custody transfer halted at {{read_chromatograph_telemetry.station_name}}. H2S={{read_chromatograph_telemetry.h2s_content_ppm}} ppm, HCDP={{read_chromatograph_telemetry.hydrocarbon_dew_point_c}} C exceeds fiscal contract limits. Off-spec diversion valve activated."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_chromatograph_telemetry", "resolve"]
+      - ["read_chromatograph_telemetry", "check_gas_quality_specs", "resolve"]
+      - ["check_gas_quality_specs", "approve_custody_transfer", "resolve"]
+      - ["approve_custody_transfer", "notify_custody_transfer_cleared", "resolve"]
+      - ["check_gas_quality_specs", "create_offspec_capa_action", "reject"]
+      - ["create_offspec_capa_action", "interlock_diversion_valve", "resolve"]
+      - ["interlock_diversion_valve", "notify_offspec_gas_alarm", "resolve"]
+
+  - key: ncsp-cpm-api1130-linepack-leak-detection
+    name: "API RP 1130 / API RP 1175 Computational Pipeline Monitoring (CPM) Linepack Mass-Balance Leak Detection Flow"
+    description: "Computational Pipeline Monitoring (CPM) transient flow model and mass-balance conservation surveillance per API RP 1130 and API RP 1175. Validates linepack inventory and inlet/outlet flow balance along the 399km trunkline. Resolves steady-state linepack or rejects on leak signature to trigger mainline ESD sectionalizing and emergency broadcast."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_pipeline_integrity
+      filter:
+        status:
+          _eq: cpm_mass_balance_evaluated
+    nodes:
+      - key: read_cpm_telemetry
+        name: "Read CPM Transient Hydraulic Telemetry & Mass Balance Discrepancy"
+        type: item-read
+        options:
+          collection: ncsp_pipeline_integrity
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - kilometer_post
+              - segment_name
+              - cp_potential_mv
+              - integrity_status
+              - status
+              - mass_balance_discrepancy_pct
+        position_x: 1
+        position_y: 1
+
+      - key: check_mass_balance_discrepancy
+        name: "Check API RP 1130 Mass Balance Discrepancy (<= 1.0%)"
+        type: condition
+        options:
+          filter:
+            read_cpm_telemetry:
+              mass_balance_discrepancy_pct:
+                _lte: 1.0
+        position_x: 20
+        position_y: 1
+
+      - key: record_steady_state_linepack
+        name: "Record Steady-State Linepack Inventory Verified"
+        type: item-update
+        options:
+          collection: ncsp_pipeline_integrity
+          key: "{{$trigger.key}}"
+          data:
+            status: linepack_nominal
+            integrity_status: steady_state_verified
+        position_x: 40
+        position_y: 1
+
+      - key: notify_linepack_nominal
+        name: "Notify Dispatch of Hydraulic Linepack Stability"
+        type: notification
+        options:
+          recipient: "GAS_DISPATCH_SUPERINTENDENT"
+          subject: "API RP 1130 CPM Nominal: Segment {{read_cpm_telemetry.segment_name}}"
+          message: "Linepack mass-balance discrepancy {{read_cpm_telemetry.mass_balance_discrepancy_pct}}% is within nominal 1.0% tolerance. Pipeline hydraulics steady."
+        position_x: 60
+        position_y: 1
+
+      - key: create_leak_emergency_record
+        name: "Create Loss of Containment Incident in Emergency Incidents"
+        type: item-create
+        options:
+          collection: ncsp_emergency_incidents
+          data:
+            incident_code: "INC-CPM-LEAK-KP{{read_cpm_telemetry.kilometer_post}}"
+            segment_code: "{{read_cpm_telemetry.segment_name}}"
+            kilometer_post: 120.0
+            incident_type: cpm_mass_balance_leak
+            gas_leak_rate_kg_s: 15.5
+            esd_trip_triggered: true
+            flame_detected: false
+            affected_jurisdiction: Offshore_Ba_Ria_Vung_Tau
+            status: emergency_declared
+            esd_isolated: true
+            callout_tree_broadcasted: true
+            alert_flag: api1130_mass_balance_breach
+        position_x: 40
+        position_y: 15
+
+      - key: update_cpm_leak_status
+        name: "Update Pipeline Integrity to Leak Alarm & ESD Sequence Triggered"
+        type: item-update
+        options:
+          collection: ncsp_pipeline_integrity
+          key: "{{$trigger.key}}"
+          data:
+            status: leak_alarm_esd_triggered
+            integrity_status: rupture_leak_suspected
+        position_x: 60
+        position_y: 15
+
+      - key: notify_cpm_leak_esd
+        name: "Broadcast Emergency Linepack Breach & Sectionalizing Valve Trip"
+        type: notification
+        options:
+          recipient: "PIPELINE_EMERGENCY_DIRECTOR"
+          subject: "CRITICAL API 1130 CPM LEAK ALARM: Segment {{read_cpm_telemetry.segment_name}}"
+          message: "Mass-balance discrepancy {{read_cpm_telemetry.mass_balance_discrepancy_pct}}% exceeds 1.0% limit at KP {{read_cpm_telemetry.kilometer_post}}. Sectionalizing mainline ESD valves tripped. Emergency broadcast dispatched."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_cpm_telemetry", "resolve"]
+      - ["read_cpm_telemetry", "check_mass_balance_discrepancy", "resolve"]
+      - ["check_mass_balance_discrepancy", "record_steady_state_linepack", "resolve"]
+      - ["record_steady_state_linepack", "notify_linepack_nominal", "resolve"]
+      - ["check_mass_balance_discrepancy", "create_leak_emergency_record", "reject"]
+      - ["create_leak_emergency_record", "update_cpm_leak_status", "resolve"]
+      - ["update_cpm_leak_status", "notify_cpm_leak_esd", "resolve"]
+
+  - key: ncsp-hca-b318s-class-location-upgrade
+    name: "ASME B31.8S High Consequence Area (HCA) Class Location Upgrade & MAOP Requalification Gate"
+    description: "Manages High Consequence Area (HCA) population density surveys and Class Location reclassification per ASME B31.8 / ASME B31.8S. Checks if current class location exceeds previous class location (e.g. Class 1 to Class 2/3 due to urbanization). Confirms existing design factor adequacy or mandates MAOP derating and hydrotest requalification in ncsp_maop_deratings."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - ncsp_hca_class_assessments
+      filter:
+        status:
+          _eq: population_density_surveyed
+    nodes:
+      - key: read_hca_survey
+        name: "Read High Consequence Area Class Location Survey Telemetry"
+        type: item-read
+        options:
+          collection: ncsp_hca_class_assessments
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - segment_id
+              - kp_start
+              - kp_end
+              - previous_class_location
+              - current_class_location
+              - dwelling_count_within_200m
+              - design_factor_f
+              - requalification_method
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: check_class_location_change
+        name: "Check Class Location Population Density Stability (Dwellings <= 10)"
+        type: condition
+        options:
+          filter:
+            read_hca_survey:
+              dwelling_count_within_200m:
+                _lte: 10
+        position_x: 20
+        position_y: 1
+
+      - key: confirm_class_design_adequacy
+        name: "Confirm ASME B31.8 Design Factor Adequacy"
+        type: item-update
+        options:
+          collection: ncsp_hca_class_assessments
+          key: "{{$trigger.key}}"
+          data:
+            status: design_factor_adequate
+            requalification_method: none_class_stable
+        position_x: 40
+        position_y: 1
+
+      - key: notify_class_adequate
+        name: "Notify Engineering of Class Location Confirmation"
+        type: notification
+        options:
+          recipient: "PIPELINE_INTEGRITY_SUPERINTENDENT"
+          subject: "ASME B31.8 Class Location Confirmed: Segment {{read_hca_survey.segment_id}}"
+          message: "Dwelling count {{read_hca_survey.dwelling_count_within_200m}} within 200m buffer confirms Class {{read_hca_survey.current_class_location}} stability for KP {{read_hca_survey.kp_start}} to {{read_hca_survey.kp_end}}. Design factor F={{read_hca_survey.design_factor_f}} is adequate."
+        position_x: 60
+        position_y: 1
+
+      - key: create_maop_requalification_derating
+        name: "Initiate ASME B31.8S MAOP Derating & Hydrotest Requalification"
+        type: item-create
+        options:
+          collection: ncsp_maop_deratings
+          data:
+            segment_code: "{{read_hca_survey.segment_id}}"
+            kilometer_post: 12.5
+            design_maop_bar: 70.0
+            current_operating_pressure_bar: 68.0
+            calculated_safe_pressure_bar: 56.0
+            derated_maop_bar: 56.0
+            erf_ratio: 1.25
+            status: derating_evaluation_requested
+            scada_setpoint_updated: false
+        position_x: 40
+        position_y: 15
+
+      - key: update_hca_assessment_derating_mandated
+        name: "Update HCA Record to Derating & Hydrotest Mandated"
+        type: item-update
+        options:
+          collection: ncsp_hca_class_assessments
+          key: "{{$trigger.key}}"
+          data:
+            status: derating_and_hydrotest_mandated
+            requalification_method: hydrotest_and_maop_derating
+        position_x: 60
+        position_y: 15
+
+      - key: notify_hca_upgrade_action
+        name: "Alert Chief Engineering Officer of Mandatory Class Upgrade Action"
+        type: notification
+        options:
+          recipient: "CHIEF_ENGINEERING_OFFICER"
+          subject: "ASME B31.8S MANDATORY UPGRADE: Segment {{read_hca_survey.segment_id}} Class Location Escalation"
+          message: "Class location upgrade detected due to dwelling count {{read_hca_survey.dwelling_count_within_200m}} > 10 between KP {{read_hca_survey.kp_start}} and {{read_hca_survey.kp_end}}. Design factor derating or hydrotest requalification initiated in ncsp_maop_deratings."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_hca_survey", "resolve"]
+      - ["read_hca_survey", "check_class_location_change", "resolve"]
+      - ["check_class_location_change", "confirm_class_design_adequacy", "resolve"]
+      - ["confirm_class_design_adequacy", "notify_class_adequate", "resolve"]
+      - ["check_class_location_change", "create_maop_requalification_derating", "reject"]
+      - ["create_maop_requalification_derating", "update_hca_assessment_derating_mandated", "resolve"]
+      - ["update_hca_assessment_derating_mandated", "notify_hca_upgrade_action", "resolve"]
+
 rules:
   - rule_id: NCSP-PIG-001
     name: "Pig Trap Equalization Pressure Rule"
@@ -1152,6 +1675,22 @@ rules:
     condition: "distance_to_pipeline_m > 50.0"
     enforcement: strict_rejection
     action: "Suspend nearby excavation permits and dispatch security intercept."
+
+  - rule_id: NCSP-CP-004
+    name: "ISO 15589-1 Polarized Instant-Off Potential Safe Range"
+    description: "Cathodic protection polarized instant-off potential must remain between -850 mV and -1200 mV CSE per ISO 15589-1 to prevent under-protection corrosion or over-protection coating disbondment."
+    severity: critical
+    condition: "instant_off_potential_mv_cse <= -850.0 && instant_off_potential_mv_cse >= -1200.0"
+    enforcement: strict_rejection
+    action: "Block CP compliance certification and trigger urgent transformer-rectifier output adjustment."
+
+  - rule_id: NCSP-AGA8-005
+    name: "AGA Report No. 8 / ISO 6976 Fiscal Gas Quality Standard"
+    description: "Fiscal custody transfer gas delivery must satisfy H2S content <= 4.0 ppm and hydrocarbon dew point <= 0.0 deg C per AGA Report No. 8 and ISO 6976."
+    severity: critical
+    condition: "h2s_content_ppm <= 4.0 && hydrocarbon_dew_point_c <= 0.0"
+    enforcement: strict_rejection
+    action: "Trigger off-spec gas diversion valve interlock and log corrective action in grc_actions."
 
 insights:
   - name: "Pipeline Integrity & Gas Metering Delivery Live Board"

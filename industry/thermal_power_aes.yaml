@@ -185,6 +185,16 @@ taxonomy_and_fields:
           type: float
         - field: equivalent_availability_factor
           type: float
+        - field: status
+          type: string
+        - field: net_heat_rate_kj_kwh
+          type: float
+        - field: condenser_backpressure_mbar
+          type: float
+        - field: efficiency_certified
+          type: boolean
+        - field: alert_flag
+          type: string
 
     - collection: aes_contractor_equipment
       name: "Contractor Safety Credential & Equipment Register"
@@ -283,6 +293,81 @@ taxonomy_and_fields:
           type: string
         - field: deadline_hours
           type: integer
+
+    - collection: aes_transformer_dga_telemetry
+      name: "GSU Transformer DGA Telemetry"
+      description: "Dissolved Gas Analysis (DGA) surveillance per IEEE C57.104 and Duval Triangle fault diagnosis for Generator Step-Up transformers."
+      fields:
+        - field: id
+          type: uuid
+        - field: transformer_tag
+          type: string
+        - field: h2_ppm
+          type: float
+        - field: ch4_ppm
+          type: float
+        - field: c2h2_ppm
+          type: float
+        - field: c2h4_ppm
+          type: float
+        - field: c2h6_ppm
+          type: float
+        - field: tdcg_ppm
+          type: float
+        - field: duval_fault_zone
+          type: string
+        - field: oil_temp_c
+          type: float
+        - field: status
+          type: string
+
+    - collection: aes_nerc_cip_assets
+      name: "NERC CIP OT Cyber Assets & Baseline Ledger"
+      description: "Configuration baseline, cryptographic hash integrity, and Maker-Checker patch authorization for BES Cyber Systems per NERC CIP-007 and CIP-010."
+      fields:
+        - field: id
+          type: uuid
+        - field: cyber_asset_tag
+          type: string
+        - field: esp_zone
+          type: string
+        - field: firmware_version
+          type: string
+        - field: baseline_sha256
+          type: string
+        - field: observed_sha256
+          type: string
+        - field: patch_approval_id
+          type: string
+        - field: requester_id
+          type: uuid
+        - field: approver_id
+          type: uuid
+        - field: status
+          type: string
+
+    - collection: aes_ghg_emission_ledgers
+      name: "Thermal Generation GHG Scope 1 & Carbon Intensity Ledgers"
+      description: "Thermal power fuel consumption, net generation, and Scope 1 CO2 carbon intensity reconciliation under ISO 50001 and statutory emission quotas."
+      fields:
+        - field: id
+          type: uuid
+        - field: reporting_period
+          type: string
+        - field: unit_tag
+          type: string
+        - field: coal_consumed_tons
+          type: float
+        - field: net_generation_mwh
+          type: float
+        - field: co2_tons
+          type: float
+        - field: carbon_intensity_kg_kwh
+          type: float
+        - field: quota_limit_kg_kwh
+          type: float
+        - field: verification_status
+          type: string
 
   relations:
     - collection: aes_loto_isolations
@@ -1110,6 +1195,486 @@ business_flows:
       - ["trip_boiler_ramp_interlock", "create_boiler_inspection_action", "resolve"]
       - ["create_boiler_inspection_action", "notify_boiler_trip_emergency", "resolve"]
 
+  - key: aes-transformer-dga-ieee-c57104-gate
+    name: "IEEE C57.104 Generator Step-Up (GSU) Transformer Dissolved Gas Analysis (DGA) & Duval Triangle Fault Interlock"
+    description: "Evaluates transformer oil dissolved gas concentrations against IEEE C57.104 limits (C2H2 <= 2.0 ppm, TDCG <= 720 ppm). Normal readings certify transformer operational status; exceedances trigger Duval Triangle D2 High Energy Arcing classification, emergency inspection dispatch in hse_tasks, and corrective action CAPA in grc_actions."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.create
+        - items.update
+      collections:
+        - aes_transformer_dga_telemetry
+    nodes:
+      - key: read_transformer_dga_telemetry
+        name: "Read GSU Transformer Dissolved Gas Telemetry"
+        type: item-read
+        options:
+          collection: aes_transformer_dga_telemetry
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - transformer_tag
+              - h2_ppm
+              - ch4_ppm
+              - c2h2_ppm
+              - c2h4_ppm
+              - c2h6_ppm
+              - tdcg_ppm
+              - duval_fault_zone
+              - oil_temp_c
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_dga_ieee_thresholds
+        name: "Verify IEEE C57.104 Limits (C2H2 <= 2.0 ppm & TDCG <= 720 ppm)"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_transformer_dga_telemetry:
+                  c2h2_ppm:
+                    _lte: 2.0
+              - read_transformer_dga_telemetry:
+                  tdcg_ppm:
+                    _lte: 720.0
+        position_x: 20
+        position_y: 1
+
+      - key: mark_dga_normal_monitored
+        name: "Certify Normal Monitored Status per IEEE C57.104"
+        type: item-update
+        options:
+          collection: aes_transformer_dga_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            status: normal_monitored
+            duval_fault_zone: normal_no_fault
+        position_x: 40
+        position_y: 1
+
+      - key: notify_dga_normal_status
+        name: "Notify Substation Supervisor of Normal DGA Telemetry"
+        type: notification
+        options:
+          recipient: "SUBSTATION_ELECTRICAL_SUPERVISOR"
+          subject: "GSU Transformer {{read_transformer_dga_telemetry.transformer_tag}} DGA Telemetry Normal"
+          message: "Dissolved gas concentrations within IEEE C57.104 Condition 1 limits (C2H2 <= 2.0 ppm, TDCG <= 720 ppm). GSU transformer certified in normal monitored state."
+        position_x: 60
+        position_y: 1
+
+      - key: reject_dga_arcing_fault
+        name: "Classify D2 High-Energy Arcing Fault & Trip Interlock"
+        type: item-update
+        options:
+          collection: aes_transformer_dga_telemetry
+          key: "{{$trigger.key}}"
+          data:
+            status: critical_dga_fault_detected
+            duval_fault_zone: D2_HIGH_ENERGY_ARCING
+        position_x: 40
+        position_y: 15
+
+      - key: create_dga_urgent_task
+        name: "Dispatch Emergency DGA Inspection Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            task_title: "Emergency DGA Resampling & Buchholz Relay Inspection - {{read_transformer_dga_telemetry.transformer_tag}}"
+            unit_tag: "{{read_transformer_dga_telemetry.transformer_tag}}"
+            priority: critical
+            status: assigned
+            assigned_to: "Lead_Substation_Engineer"
+            deadline_hours: 2
+        position_x: 60
+        position_y: 15
+
+      - key: create_dga_capa_action
+        name: "Create High-Priority DGA Arcing CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "IEEE C57.104 DGA Arcing Investigation: {{read_transformer_dga_telemetry.transformer_tag}}"
+            source_module: transformer_dga
+            action_category: asset_integrity
+            priority: critical
+            status: open
+            description: "Acetylene (C2H2) {{read_transformer_dga_telemetry.c2h2_ppm}} ppm or TDCG {{read_transformer_dga_telemetry.tdcg_ppm}} ppm exceeded IEEE C57.104 thresholds. Duval Triangle diagnosis indicates D2 High-Energy Arcing."
+        position_x: 80
+        position_y: 15
+
+      - key: notify_dga_arcing_alert
+        name: "Alert Electrical Superintendent of Critical DGA Arcing"
+        type: notification
+        options:
+          recipient: "ELECTRICAL_MAINTENANCE_SUPERINTENDENT"
+          subject: "CRITICAL DGA TRIP INTERLOCK: High-Energy Arcing on {{read_transformer_dga_telemetry.transformer_tag}}"
+          message: "C2H2={{read_transformer_dga_telemetry.c2h2_ppm}} ppm, TDCG={{read_transformer_dga_telemetry.tdcg_ppm}} ppm. Duval Triangle D2 arcing detected. Urgent task and CAPA dispatched."
+        position_x: 100
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_transformer_dga_telemetry", "resolve"]
+      - ["read_transformer_dga_telemetry", "verify_dga_ieee_thresholds", "resolve"]
+      - ["verify_dga_ieee_thresholds", "mark_dga_normal_monitored", "resolve"]
+      - ["mark_dga_normal_monitored", "notify_dga_normal_status", "resolve"]
+      - ["verify_dga_ieee_thresholds", "reject_dga_arcing_fault", "reject"]
+      - ["reject_dga_arcing_fault", "create_dga_urgent_task", "resolve"]
+      - ["create_dga_urgent_task", "create_dga_capa_action", "resolve"]
+      - ["create_dga_capa_action", "notify_dga_arcing_alert", "resolve"]
+
+  - key: aes-nerc-cip-010-baseline-drift-gate
+    name: "NERC CIP-007 / CIP-010 BES Cyber System Configuration Baseline Drift & Maker-Checker Patch Gate"
+    description: "Verifies OT relay, DCS, and RTU cyber asset firmware configuration baseline cryptographic integrity (SHA-256) and enforces Maker-Checker Segregation of Duties (requester != approver) before authorizing deployment inside the Electronic Security Perimeter (ESP)."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_nerc_cip_assets
+      filter:
+        status:
+          _eq: baseline_verification_requested
+    nodes:
+      - key: read_nerc_cip_asset
+        name: "Read BES Cyber Asset & Cryptographic Baseline Record"
+        type: item-read
+        options:
+          collection: aes_nerc_cip_assets
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - cyber_asset_tag
+              - esp_zone
+              - firmware_version
+              - baseline_sha256
+              - observed_sha256
+              - patch_approval_id
+              - requester_id
+              - approver_id
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_cip_baseline_and_sod
+        name: "Verify Cryptographic Baseline Hash Parity & Maker-Checker SoD"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_nerc_cip_asset:
+                  baseline_sha256:
+                    _eq: "{{read_nerc_cip_asset.observed_sha256}}"
+              - read_nerc_cip_asset:
+                  requester_id:
+                    _neq: "{{read_nerc_cip_asset.approver_id}}"
+        position_x: 20
+        position_y: 1
+
+      - key: authorize_esp_deployment
+        name: "Authorize Deployment Inside Electronic Security Perimeter"
+        type: item-update
+        options:
+          collection: aes_nerc_cip_assets
+          key: "{{$trigger.key}}"
+          data:
+            status: esp_deployment_authorized
+        position_x: 40
+        position_y: 1
+
+      - key: notify_esp_authorization
+        name: "Notify Approver of Verified Baseline & ESP Authorization"
+        type: notification
+        options:
+          recipient: "{{read_nerc_cip_asset.approver_id}}"
+          subject: "NERC CIP Clearance: {{read_nerc_cip_asset.cyber_asset_tag}} Cleared for ESP Deployment"
+          message: "Cryptographic baseline hash verified and Maker-Checker SoD confirmed. Patch deployment into ESP Zone {{read_nerc_cip_asset.esp_zone}} authorized."
+        position_x: 60
+        position_y: 1
+
+      - key: quarantine_baseline_drift
+        name: "Quarantine Asset Due to Baseline Drift or SoD Violation"
+        type: item-update
+        options:
+          collection: aes_nerc_cip_assets
+          key: "{{$trigger.key}}"
+          data:
+            status: quarantined_baseline_drift
+        position_x: 40
+        position_y: 15
+
+      - key: create_cip_security_incident_capa
+        name: "Create NERC CIP Cyber Security Incident CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "NERC CIP-010 Baseline Drift / SoD Incident: {{read_nerc_cip_asset.cyber_asset_tag}}"
+            source_module: nerc_cip_compliance
+            action_category: cyber_security
+            priority: critical
+            status: open
+            description: "Configuration baseline mismatch (observed SHA-256 differs from approved baseline) or Maker-Checker SoD violation on BES Cyber Asset {{read_nerc_cip_asset.cyber_asset_tag}} in ESP Zone {{read_nerc_cip_asset.esp_zone}}."
+        position_x: 60
+        position_y: 15
+
+      - key: notify_cip_drift_incident
+        name: "Alert OT Security Officer of Unauthorized Drift"
+        type: notification
+        options:
+          recipient: "OT_SECURITY_OFFICER"
+          subject: "CRITICAL NERC CIP GATE REJECTION: {{read_nerc_cip_asset.cyber_asset_tag}} Quarantined"
+          message: "Cryptographic hash mismatch or SoD collision detected. Cyber asset quarantined and security incident CAPA logged."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_nerc_cip_asset", "resolve"]
+      - ["read_nerc_cip_asset", "verify_cip_baseline_and_sod", "resolve"]
+      - ["verify_cip_baseline_and_sod", "authorize_esp_deployment", "resolve"]
+      - ["authorize_esp_deployment", "notify_esp_authorization", "resolve"]
+      - ["verify_cip_baseline_and_sod", "quarantine_baseline_drift", "reject"]
+      - ["quarantine_baseline_drift", "create_cip_security_incident_capa", "resolve"]
+      - ["create_cip_security_incident_capa", "notify_cip_drift_incident", "resolve"]
+
+  - key: aes-boiler-heat-rate-ptc4-optimization
+    name: "ASME PTC 4.1 CFB Boiler Net Heat Rate & Condenser Vacuum Degradation Recovery Flow"
+    description: "Evaluates CFB Boiler net heat rate against thermal efficiency benchmark (<= 9850 kJ/kWh) and verifies condenser backpressure. Passing tests certify unit heat-rate efficiency; degraded performance triggers targeted sootblowing dispatch and condenser tube descaling work item in hse_tasks."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_generation_units
+      filter:
+        status:
+          _eq: performance_test_completed
+    nodes:
+      - key: read_generation_unit_performance
+        name: "Read Generation Unit Performance & Heat Rate Data"
+        type: item-read
+        options:
+          collection: aes_generation_units
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - unit_id
+              - net_heat_rate_kj_kwh
+              - condenser_backpressure_mbar
+              - boiler_availability_pct
+              - turbine_availability_pct
+              - status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_heat_rate_and_vacuum_limits
+        name: "Verify ASME PTC 4.1 Heat Rate <= 9850 kJ/kWh & Vacuum Integrity"
+        type: condition
+        options:
+          filter:
+            _and:
+              - read_generation_unit_performance:
+                  net_heat_rate_kj_kwh:
+                    _lte: 9850.0
+              - read_generation_unit_performance:
+                  condenser_backpressure_mbar:
+                    _lte: 85.0
+        position_x: 20
+        position_y: 1
+
+      - key: certify_unit_efficiency
+        name: "Certify Thermal Unit Efficiency & Heat Rate Compliance"
+        type: item-update
+        options:
+          collection: aes_generation_units
+          key: "{{$trigger.key}}"
+          data:
+            status: efficiency_certified_compliant
+            efficiency_certified: true
+        position_x: 40
+        position_y: 1
+
+      - key: notify_efficiency_certified
+        name: "Notify Performance Engineer of Certified Thermal Efficiency"
+        type: notification
+        options:
+          recipient: "PLANT_PERFORMANCE_ENGINEER"
+          subject: "Unit {{read_generation_unit_performance.unit_id}} Heat Rate & Condenser Efficiency Certified"
+          message: "Net heat rate {{read_generation_unit_performance.net_heat_rate_kj_kwh}} kJ/kWh satisfies ASME PTC 4.1 efficiency design benchmark. Condenser vacuum compliant."
+        position_x: 60
+        position_y: 1
+
+      - key: flag_efficiency_degradation
+        name: "Flag Heat Rate Degradation & Vacuum Deficiency"
+        type: item-update
+        options:
+          collection: aes_generation_units
+          key: "{{$trigger.key}}"
+          data:
+            status: heat_rate_degraded_remediation_required
+            efficiency_certified: false
+            alert_flag: heat_rate_or_condenser_vacuum_degraded
+        position_x: 40
+        position_y: 15
+
+      - key: create_sootblowing_and_tube_cleaning_task
+        name: "Dispatch Targeted Sootblowing & Condenser Cleaning Task"
+        type: item-create
+        options:
+          collection: hse_tasks
+          data:
+            task_title: "CFB Intelligent Sootblowing & Condenser Waterbox Ball Cleaning: Unit {{read_generation_unit_performance.unit_id}}"
+            unit_tag: "{{read_generation_unit_performance.unit_id}}"
+            priority: high
+            status: assigned
+            assigned_to: "Boiler_Efficiency_Specialist"
+            deadline_hours: 8
+        position_x: 60
+        position_y: 15
+
+      - key: notify_degradation_alert
+        name: "Alert Performance Team of Efficiency Recovery Dispatch"
+        type: notification
+        options:
+          recipient: "PLANT_PERFORMANCE_ENGINEER"
+          subject: "EFFICIENCY DEGRADATION ALERT: Unit {{read_generation_unit_performance.unit_id}} Heat Rate Exceeded"
+          message: "Net heat rate {{read_generation_unit_performance.net_heat_rate_kj_kwh}} kJ/kWh > 9850 kJ/kWh. Automated sootblowing & condenser ball cleaning task created."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_generation_unit_performance", "resolve"]
+      - ["read_generation_unit_performance", "verify_heat_rate_and_vacuum_limits", "resolve"]
+      - ["verify_heat_rate_and_vacuum_limits", "certify_unit_efficiency", "resolve"]
+      - ["certify_unit_efficiency", "notify_efficiency_certified", "resolve"]
+      - ["verify_heat_rate_and_vacuum_limits", "flag_efficiency_degradation", "reject"]
+      - ["flag_efficiency_degradation", "create_sootblowing_and_tube_cleaning_task", "resolve"]
+      - ["create_sootblowing_and_tube_cleaning_task", "notify_degradation_alert", "resolve"]
+
+  - key: aes-iso50001-ghg-scope1-reconciliation
+    name: "ISO 50001 & GHG Scope 1 Thermal Carbon Intensity & Emission Quota Gate"
+    description: "Surveils thermal power carbon intensity (kg CO2 per kWh net generation) against statutory environmental allocation limits under ISO 50001 and Decree 06/2022/ND-CP. Compliant ledgers are locked as verified; quota overages trigger mandatory fuel-blend and combustion optimization CAPA in grc_actions."
+    status: active
+    accountability: activity
+    trigger:
+      type: action
+      scope:
+        - items.update
+      collections:
+        - aes_ghg_emission_ledgers
+      filter:
+        verification_status:
+          _eq: pending_reconciliation
+    nodes:
+      - key: read_ghg_emission_ledger
+        name: "Read Thermal Generation GHG Scope 1 Ledger"
+        type: item-read
+        options:
+          collection: aes_ghg_emission_ledgers
+          key: "{{$trigger.key}}"
+          query:
+            fields:
+              - id
+              - reporting_period
+              - unit_tag
+              - coal_consumed_tons
+              - net_generation_mwh
+              - co2_tons
+              - carbon_intensity_kg_kwh
+              - quota_limit_kg_kwh
+              - verification_status
+        position_x: 1
+        position_y: 1
+
+      - key: verify_ghg_quota_compliance
+        name: "Verify ISO 50001 Carbon Intensity Quota Compliance"
+        type: condition
+        options:
+          filter:
+            read_ghg_emission_ledger:
+              carbon_intensity_kg_kwh:
+                _lte: "{{read_ghg_emission_ledger.quota_limit_kg_kwh}}"
+        position_x: 20
+        position_y: 1
+
+      - key: lock_verified_ghg_ledger
+        name: "Lock Verified & Quota-Compliant GHG Ledger"
+        type: item-update
+        options:
+          collection: aes_ghg_emission_ledgers
+          key: "{{$trigger.key}}"
+          data:
+            verification_status: verified_quota_compliant
+        position_x: 40
+        position_y: 1
+
+      - key: notify_ghg_reconciliation_cleared
+        name: "Notify Environmental Director of Cleared Reconciliation"
+        type: notification
+        options:
+          recipient: "ENVIRONMENTAL_COMPLIANCE_DIRECTOR"
+          subject: "GHG Scope 1 Verified: Period {{read_ghg_emission_ledger.reporting_period}} Compliant"
+          message: "Carbon intensity {{read_ghg_emission_ledger.carbon_intensity_kg_kwh}} kg CO2/kWh is within statutory quota {{read_ghg_emission_ledger.quota_limit_kg_kwh}} kg CO2/kWh. Ledger locked."
+        position_x: 60
+        position_y: 1
+
+      - key: quarantine_ghg_quota_overage
+        name: "Quarantine GHG Ledger Due to Quota Overage"
+        type: item-update
+        options:
+          collection: aes_ghg_emission_ledgers
+          key: "{{$trigger.key}}"
+          data:
+            verification_status: quota_exceeded_capa_required
+        position_x: 40
+        position_y: 15
+
+      - key: create_fuel_combustion_optimization_capa
+        name: "Create Fuel Combustion & Blend Optimization CAPA"
+        type: item-create
+        options:
+          collection: grc_actions
+          data:
+            title: "GHG Scope 1 Quota Exceedance Remediation - Unit {{read_ghg_emission_ledger.unit_tag}}"
+            source_module: ghg_reconciliation
+            action_category: statutory_compliance
+            priority: high
+            status: open
+            description: "Carbon intensity {{read_ghg_emission_ledger.carbon_intensity_kg_kwh}} kg/kWh exceeded quota {{read_ghg_emission_ledger.quota_limit_kg_kwh}} kg/kWh during {{read_ghg_emission_ledger.reporting_period}}. Mandatory fuel-blend ratio adjustment and excess air combustion optimization required."
+        position_x: 60
+        position_y: 15
+
+      - key: notify_ghg_quota_breach
+        name: "Alert Environmental Director of Quota Exceedance"
+        type: notification
+        options:
+          recipient: "ENVIRONMENTAL_COMPLIANCE_DIRECTOR"
+          subject: "ALERT: GHG Scope 1 Emission Quota Exceeded for {{read_ghg_emission_ledger.reporting_period}}"
+          message: "Carbon intensity {{read_ghg_emission_ledger.carbon_intensity_kg_kwh}} kg/kWh exceeded limit {{read_ghg_emission_ledger.quota_limit_kg_kwh}} kg/kWh. Corrective CAPA created."
+        position_x: 80
+        position_y: 15
+
+    edges:
+      - ["$trigger", "read_ghg_emission_ledger", "resolve"]
+      - ["read_ghg_emission_ledger", "verify_ghg_quota_compliance", "resolve"]
+      - ["verify_ghg_quota_compliance", "lock_verified_ghg_ledger", "resolve"]
+      - ["lock_verified_ghg_ledger", "notify_ghg_reconciliation_cleared", "resolve"]
+      - ["verify_ghg_quota_compliance", "quarantine_ghg_quota_overage", "reject"]
+      - ["quarantine_ghg_quota_overage", "create_fuel_combustion_optimization_capa", "resolve"]
+      - ["create_fuel_combustion_optimization_capa", "notify_ghg_quota_breach", "resolve"]
+
 rules:
   - rule_id: AES-LOTO-001
     name: "Zero Voltage & Earth Switch Requirement"
@@ -1142,6 +1707,22 @@ rules:
     condition: "crane_load_test_valid == true && pressure_vessel_cert_valid == true"
     enforcement: strict_rejection
     action: "Block PTW creation and notify site access security."
+
+  - rule_id: AES-DGA-004
+    name: "IEEE C57.104 Transformer Dissolved Gas & Duval Limit"
+    description: "Acetylene (C2H2) must remain <= 2.0 ppm and Total Dissolved Combustible Gas (TDCG) <= 720 ppm to prevent arcing flashover in GSU transformers."
+    severity: critical
+    condition: "c2h2_ppm <= 2.0"
+    enforcement: strict_rejection
+    action: "Trigger immediate GSU transformer isolation review and dispatch urgent gas chromatography sampling."
+
+  - rule_id: AES-CIP-005
+    name: "NERC CIP-010 OT Configuration Baseline Hash Parity"
+    description: "Observed firmware and relay logic SHA-256 hash must strictly equal the authorized baseline hash prior to Electronic Security Perimeter deployment."
+    severity: critical
+    condition: "baseline_sha256 == observed_sha256"
+    enforcement: strict_rejection
+    action: "Quarantine unauthorized cyber asset drift and open high-priority security incident CAPA."
 
 insights:
   - name: "Boiler & Turbine Availability & CEMS Emissions Dashboard"
